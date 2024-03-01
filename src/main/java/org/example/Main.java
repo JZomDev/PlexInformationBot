@@ -16,7 +16,6 @@ import org.example.listeners.ServerBecomesAvailable;
 import org.example.workers.CountPlexUsersWorker;
 import org.javacord.api.DiscordApi;
 import org.javacord.api.DiscordApiBuilder;
-import org.javacord.api.entity.activity.ActivityType;
 
 public class Main
 {
@@ -111,7 +110,7 @@ public class Main
 				try
 				{
 					CountPlexUsersWorker countPlexUsersWorker = new CountPlexUsersWorker();
-					api.updateActivity(ActivityType.STREAMING, countPlexUsersWorker.execute(api, PLEX_KEY).join());
+					api.updateActivity(countPlexUsersWorker.execute(api, PLEX_KEY).join());
 				}
 				catch (Exception e)
 				{
