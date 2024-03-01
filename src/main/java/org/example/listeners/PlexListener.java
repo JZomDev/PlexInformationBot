@@ -1,8 +1,8 @@
 package org.example.listeners;
 
+import kekolab.javaplex.PlexMediaServer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import static org.example.Main.PLEX_KEY;
 import org.example.workers.ActivePlexUsersWorker;
 import org.javacord.api.entity.message.MessageFlag;
 import org.javacord.api.event.interaction.SlashCommandCreateEvent;
@@ -13,9 +13,12 @@ public class PlexListener implements SlashCommandCreateListener
 {
 	private static final Logger logger = LogManager.getLogger(PlexListener.class);
 
-	public PlexListener()
+	PlexMediaServer plexMediaServer;
+
+	public PlexListener(PlexMediaServer plexMediaServer)
 	{
 		logger.info("Plex Listener has started");
+		this.plexMediaServer = plexMediaServer;
 	}
 
 	@Override
@@ -34,7 +37,7 @@ public class PlexListener implements SlashCommandCreateListener
 
 					try
 					{
-						String line = activePlexUsersWorker.execute(event.getApi(), PLEX_KEY).join();
+						String line = activePlexUsersWorker.execute(event.getApi(), plexMediaServer).join();
 
 						slashCommandInteraction.createFollowupMessageBuilder()
 							.setContent(line)

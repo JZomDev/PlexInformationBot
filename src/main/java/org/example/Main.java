@@ -1,5 +1,7 @@
 package org.example;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -7,6 +9,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import kekolab.javaplex.PlexHTTPClient;
+import kekolab.javaplex.PlexHTTPClientBuilder;
+import kekolab.javaplex.PlexMediaServer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.example.listeners.MessageListener;
@@ -20,10 +25,9 @@ import org.javacord.api.DiscordApiBuilder;
 public class Main
 {
 
+	public static final String DISCORD_MESSAGE = "React to this message to get your roles!";
 	private static final String CURRENT_VERSION = "1.0.0";
 	private static final Logger logger = LogManager.getLogger(Main.class);
-	public static final String DISCORD_MESSAGE = "React to this message to get your roles!";
-
 	public static String DISCORD_TOKEN = "";
 	public static String IP = "";
 	public static String PORT = "";
@@ -92,14 +96,17 @@ public class Main
 
 		logger.info("You can invite me by using the following url: " + discordApi.createBotInvite());
 
-		discordApi.bulkOverwriteGlobalApplicationCommands(slashCommandsSetUp.getCommands());
-		discordApi.addSlashCommandCreateListener(new PlexListener());
+		PlexHTTPClient plexHTTPClient = getPlexHTTPClient();
+		PlexMediaServer plexMediaServer = getPlexMediaServer(plexHTTPClient);
 
-		launchScheduledExecutor(discordApi);
+		discordApi.bulkOverwriteGlobalApplicationCommands(slashCommandsSetUp.getCommands());
+		discordApi.addSlashCommandCreateListener(new PlexListener(plexMediaServer));
+
+		launchScheduledExecutor(discordApi, plexMediaServer);
 
 	}
 
-	public static void launchScheduledExecutor(DiscordApi api)
+	public static void launchScheduledExecutor(DiscordApi api, PlexMediaServer plexMediaServer)
 	{
 		if (mService == null || mService.isShutdown())
 		{
@@ -110,7 +117,7 @@ public class Main
 				try
 				{
 					CountPlexUsersWorker countPlexUsersWorker = new CountPlexUsersWorker();
-					api.updateActivity(countPlexUsersWorker.execute(api, PLEX_KEY).join());
+					api.updateActivity(countPlexUsersWorker.execute(api, plexMediaServer).join());
 				}
 				catch (Exception e)
 				{
@@ -126,7 +133,7 @@ public class Main
 				}
 			},
 			0, // How long to delay the start
-			20, // How long between executions
+			5, // How long between executions
 			TimeUnit.SECONDS); // The time unit used
 	}
 
@@ -164,5 +171,21 @@ public class Main
 			threadPool.shutdownNow();
 			Thread.currentThread().interrupt();
 		}
+	}
+
+	private static PlexHTTPClient getPlexHTTPClient()
+	{
+		PlexHTTPClient plexPlexHTTPClient = new PlexHTTPClientBuilder()
+			.withPlexDeviceName("Plex Information Bot")
+			.build();
+
+		return plexPlexHTTPClient;
+	}
+
+	private static PlexMediaServer getPlexMediaServer(PlexHTTPClient client) throws URISyntaxException
+	{
+		PlexMediaServer plexMediaServer = new PlexMediaServer(new URI("http://" + IP + ":" + PORT), client, PLEX_KEY);
+
+		return plexMediaServer;
 	}
 }

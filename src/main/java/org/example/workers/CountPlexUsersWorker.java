@@ -1,62 +1,80 @@
 package org.example.workers;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.URL;
-import java.net.URLConnection;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import org.example.Main;
+import kekolab.javaplex.PlexEpisode;
+import kekolab.javaplex.PlexMediaServer;
+import kekolab.javaplex.PlexMediatag;
+import kekolab.javaplex.PlexMovie;
+import kekolab.javaplex.PlexPart;
 import org.javacord.api.DiscordApi;
 
 public class CountPlexUsersWorker
 {
-	public CompletableFuture<String> execute(DiscordApi api, String PLEX_KEY)
+	public CompletableFuture<String> execute(DiscordApi api, PlexMediaServer plexMediaServer)
 	{
 		return CompletableFuture.supplyAsync(() -> {
 			try
 			{
 				try
 				{
-					URL url = new URL("http://" + Main.IP + ":" + Main.PORT + "/status/sessions");
-					URLConnection request = url.openConnection();
-					request.addRequestProperty("X-Plex-Token", PLEX_KEY);
-					request.addRequestProperty("Accept", "application/json");
-					request.connect();
-					JsonElement root = JsonParser.parseReader(new InputStreamReader((InputStream) request.getContent()));
 
-					JsonObject mediaContainer = root.getAsJsonObject().get("MediaContainer").getAsJsonObject();
-					int transcodeCount = 0;
-					int total = 0;
-					if (mediaContainer.has("size") && mediaContainer.get("size").getAsLong() > 0)
+					List<PlexMediatag<?>> mediatags = plexMediaServer.status().sessions(); // A list of all the items being streamed
+
+					int totalTotal = mediatags.size();
+					int directPlayTotal = 0;
+					int transcodeTotal = 0;
+					int directPlayMovie = 0;
+					int transcodeMovie = 0;
+					int directPlayEpisode = 0;
+					int transcodeEpisode = 0;
+					for (int i = 0; i < mediatags.size(); i++)
 					{
-						JsonArray metadata = mediaContainer.get("Metadata").getAsJsonArray();
-						total = metadata.size();
-						for (int i = 0; i < metadata.size(); i++)
+						PlexMediatag plexMediatag = mediatags.get(i);
+						if (plexMediatag instanceof PlexMovie b)
 						{
-							JsonArray media = metadata.get(i).getAsJsonObject().get("Media").getAsJsonArray();
-							JsonObject members = media.get(0).getAsJsonObject();
-							JsonArray part = members.get("Part").getAsJsonArray();
-							for (int ii = 0; ii < part.size(); ii++)
-							{
-								JsonObject p = part.get(ii).getAsJsonObject();
-								if (p.has("Stream"))
-								{
-									JsonArray stream = p.get("Stream").getAsJsonArray();
-									for (int iii = 0; iii < stream.size(); iii++)
-									{
-										JsonObject streamObject = stream.get(iii).getAsJsonObject();
+							b.getMedia().size();
 
-										if (streamObject.has("width"))
-										{
-											if (streamObject.has("decision") && streamObject.get("decision").getAsString().equals("transcode"))
-											{
-												transcodeCount++;
-											}
-										}
+							for (int j = 0; j < b.getMedia().size(); j++)
+							{
+								List<PlexPart> plexParts = b.getMedia().get(0).getParts();
+
+								for (int jj = 0; jj < plexParts.size(); jj++)
+								{
+									PlexPart p = plexParts.get(jj);
+									if (p.getDecision().equals("directplay"))
+									{
+										directPlayTotal++;
+										directPlayMovie++;
+									}
+									else
+									{
+										transcodeTotal++;
+										transcodeMovie++;
+									}
+								}
+							}
+						}
+						if (plexMediatag instanceof PlexEpisode b)
+						{
+							b.getMedia().size();
+
+							for (int j = 0; j < b.getMedia().size(); j++)
+							{
+								List<PlexPart> plexParts = b.getMedia().get(0).getParts();
+
+								for (int jj = 0; jj < plexParts.size(); jj++)
+								{
+									PlexPart p = plexParts.get(jj);
+									if (p.getDecision().equals("directplay"))
+									{
+										directPlayTotal++;
+										directPlayEpisode++;
+									}
+									else
+									{
+										transcodeTotal++;
+										transcodeEpisode++;
 									}
 								}
 							}
@@ -64,17 +82,17 @@ public class CountPlexUsersWorker
 					}
 
 					String line = "unknown";
-					if (total == 0)
+					if (totalTotal == 0)
 					{
 						line = "to 0 people";
 					}
-					else if (total == 1)
+					else if (totalTotal == 1)
 					{
 						line = "to 1 person";
 					}
-					else if (total > 1)
+					else
 					{
-						line = "to " + total + " people";
+						line = "to " + totalTotal + " people";
 					}
 					return line;
 				}

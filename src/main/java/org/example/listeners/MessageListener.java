@@ -11,11 +11,17 @@ public class MessageListener implements MessageCreateListener
 	@Override
 	public void onMessageCreate(MessageCreateEvent event)
 	{
-		if (event.isPrivateMessage()) return;
+		if (event.isPrivateMessage())
+		{
+			return;
+		}
 
 		Message msg = event.getMessage();
 
-		if (!msg.getAuthor().isServerAdmin()) return;
+		if (!msg.getAuthor().isServerAdmin())
+		{
+			return;
+		}
 
 		if (msg.getContent().equals("!addreactmessage"))
 		{

@@ -16,19 +16,17 @@ java {
 
 repositories {
     mavenCentral()
+    maven("https://jitpack.io")
 }
 
 dependencies {
     implementation("org.javacord:javacord:3.8.0")
     implementation("org.apache.logging.log4j:log4j-api:2.17.2")
-    implementation("com.googlecode.json-simple:json-simple:1.1.1")
     implementation("com.google.code.gson:gson:2.10.1")
 
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.13.4.2")
-    implementation("org.apache.httpcomponents.client5:httpclient5:5.2-beta1")
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.14.0-rc2")
-
     runtimeOnly("org.apache.logging.log4j:log4j-core:2.19.0")
+
+    implementation("com.github.kekolab:javaplex:3.1.0")
 }
 
 application {

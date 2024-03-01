@@ -16,9 +16,8 @@ import org.javacord.api.listener.message.reaction.ReactionRemoveListener;
 
 public class ReactListener implements ReactionAddListener, ReactionRemoveListener
 {
-	String roleID;
-
 	private static final Logger logger = LogManager.getLogger(ReactListener.class);
+	String roleID;
 
 	public ReactListener(String roleID)
 	{
@@ -33,11 +32,17 @@ public class ReactListener implements ReactionAddListener, ReactionRemoveListene
 		Message MessageReacted = event.requestMessage().join();
 		Server server = event.getServer().get();
 		User userReacted = event.getUser().get();
-		if (userReacted.getId() == botUserID) return;
+		if (userReacted.getId() == botUserID)
+		{
+			return;
+		}
 
 		Emoji emoji = event.getEmoji();
 
-		if (!emoji.equalsEmoji("\uD83C\uDFAC")) return;
+		if (!emoji.equalsEmoji("\uD83C\uDFAC"))
+		{
+			return;
+		}
 
 		if (MessageReacted.getAuthor().getId() == botUserID && MessageReacted.getContent().equals(msgToReact))
 		{
@@ -67,11 +72,17 @@ public class ReactListener implements ReactionAddListener, ReactionRemoveListene
 
 		Server server = event.getServer().get();
 		User userReacted = event.getUser().get();
-		if (userReacted.getId() == botUserID) return;
+		if (userReacted.getId() == botUserID)
+		{
+			return;
+		}
 
 		Emoji emoji = event.getEmoji();
 
-		if (!emoji.equalsEmoji("\uD83C\uDFAC")) return;
+		if (!emoji.equalsEmoji("\uD83C\uDFAC"))
+		{
+			return;
+		}
 
 		if (MessageReacted.getAuthor().getId() == botUserID && MessageReacted.getContent().equals(msgToReact))
 		{
