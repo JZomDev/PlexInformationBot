@@ -19,7 +19,7 @@ repositories {
 }
 
 dependencies {
-    implementation("org.javacord:javacord:3.7.0")
+    implementation("org.javacord:javacord:3.8.0")
     implementation("org.apache.logging.log4j:log4j-api:2.17.2")
     implementation("com.googlecode.json-simple:json-simple:1.1.1")
     implementation("com.google.code.gson:gson:2.10.1")
