@@ -9,23 +9,26 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.example.listeners.MessageListener;
 import org.example.listeners.PlexListener;
+import org.example.listeners.ReactListener;
 import org.example.listeners.ServerBecomesAvailable;
 import org.example.workers.CountPlexUsersWorker;
 import org.javacord.api.DiscordApi;
 import org.javacord.api.DiscordApiBuilder;
-import org.javacord.api.entity.activity.ActivityType;
 
 public class Main
 {
 
 	private static final String CURRENT_VERSION = "1.0.0";
 	private static final Logger logger = LogManager.getLogger(Main.class);
+	public static final String DISCORD_MESSAGE = "React to this message to get your roles!";
 
 	public static String DISCORD_TOKEN = "";
 	public static String IP = "";
 	public static String PORT = "";
 	public static String PLEX_KEY = "";
+	public static String ROLE_ID = "";
 
 	static DiscordApi discordApi = null;
 	private static ScheduledExecutorService mService;
@@ -52,6 +55,10 @@ public class Main
 			{
 				PLEX_KEY = env_var.get(envName);
 			}
+			if (envName.equals("ROLE_ID"))
+			{
+				ROLE_ID = env_var.get(envName);
+			}
 		}
 	}
 
@@ -65,7 +72,6 @@ public class Main
 		if (DISCORD_TOKEN.equals(""))
 		{
 			logger.error("Failed to start Discord bot. No Discord token supplied");
-
 			return;
 		}
 
@@ -76,6 +82,8 @@ public class Main
 		builder.setWaitForServersOnStartup(false);
 		builder.setWaitForUsersOnStartup(false);
 		builder.addServerBecomesAvailableListener(new ServerBecomesAvailable());
+		builder.addListener(new ReactListener(ROLE_ID));
+		builder.addListener(new MessageListener());
 		SlashCommandsSetUp slashCommandsSetUp = new SlashCommandsSetUp();
 
 		logger.info("The current version of the project is " + CURRENT_VERSION);
@@ -102,7 +110,7 @@ public class Main
 				try
 				{
 					CountPlexUsersWorker countPlexUsersWorker = new CountPlexUsersWorker();
-					api.updateActivity(ActivityType.STREAMING, countPlexUsersWorker.execute(api, PLEX_KEY).join());
+					api.updateActivity(countPlexUsersWorker.execute(api, PLEX_KEY).join());
 				}
 				catch (Exception e)
 				{
