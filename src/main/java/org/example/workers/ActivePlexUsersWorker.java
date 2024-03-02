@@ -24,10 +24,6 @@ public class ActivePlexUsersWorker
 					int totalTotal = mediatags.size();
 					int directPlayTotal = 0;
 					int transcodeTotal = 0;
-					int directPlayMovie = 0;
-					int transcodeMovie = 0;
-					int directPlayEpisode = 0;
-					int transcodeEpisode = 0;
 					for (PlexMediatag<?> plexMediatag : mediatags)
 					{
 						if (plexMediatag instanceof PlexMovie plexMovie)
@@ -42,12 +38,10 @@ public class ActivePlexUsersWorker
 									if (p.getDecision().equals("directplay"))
 									{
 										directPlayTotal++;
-										directPlayMovie++;
 									}
 									else
 									{
 										transcodeTotal++;
-										transcodeMovie++;
 									}
 								}
 							}
@@ -58,18 +52,15 @@ public class ActivePlexUsersWorker
 							{
 								List<PlexPart> plexParts = plexEpisode.getMedia().get(0).getParts();
 
-								for (int jj = 0; jj < plexParts.size(); jj++)
+								for (PlexPart p : plexParts)
 								{
-									PlexPart p = plexParts.get(jj);
 									if (p.getDecision().equals("directplay"))
 									{
 										directPlayTotal++;
-										directPlayEpisode++;
 									}
 									else
 									{
 										transcodeTotal++;
-										transcodeEpisode++;
 									}
 								}
 							}
