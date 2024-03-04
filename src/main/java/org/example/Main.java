@@ -1,16 +1,7 @@
 package org.example;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParser;
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.StringWriter;
-import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
-import java.net.URLConnection;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -18,41 +9,35 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.transform.OutputKeys;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
-import kekolab.javaplex.PlexAccount;
+import java.util.regex.Pattern;
 import kekolab.javaplex.PlexHTTPClient;
 import kekolab.javaplex.PlexHTTPClientBuilder;
 import kekolab.javaplex.PlexMediaServer;
-import kekolab.javaplex.PlexSection;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.example.listeners.MessageListener;
 import org.example.listeners.PlexListener;
 import org.example.listeners.ReactListener;
+import org.example.listeners.RoleListener;
 import org.example.listeners.ServerBecomesAvailable;
 import org.example.workers.CountPlexUsersWorker;
 import org.javacord.api.DiscordApi;
 import org.javacord.api.DiscordApiBuilder;
-import org.w3c.dom.Document;
 
 public class Main
 {
 
 	public static final String DISCORD_MESSAGE = "React to this message to get your roles!";
-	private static final String CURRENT_VERSION = "1.0.0";
+	private static final String CURRENT_VERSION = "1.1.0";
 	private static final Logger logger = LogManager.getLogger(Main.class);
 	public static String DISCORD_TOKEN = "";
 	public static String IP = "";
 	public static String PORT = "";
 	public static String PLEX_KEY = "";
 	public static String ROLE_ID = "";
-
+	public static String VALID_EMAIL_ADDRESS_REGEX = "^(?=.{1,64}@)[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*@"
+		+ "[^-][A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*(\\.[A-Za-z]{2,})$";
+	public static Pattern PATTERN_MATCH = Pattern.compile(VALID_EMAIL_ADDRESS_REGEX, Pattern.CASE_INSENSITIVE);
 	static DiscordApi discordApi = null;
 	private static ScheduledExecutorService mService;
 
@@ -98,6 +83,14 @@ public class Main
 			return;
 		}
 
+		logger.info("The current version of the project is " + CURRENT_VERSION);
+
+		PlexHTTPClient plexHTTPClient = getPlexHTTPClient();
+		PlexMediaServer plexMediaServer = getPlexMediaServer(plexHTTPClient);
+		String friendlyName = plexMediaServer.getFriendlyName();
+		String machineIdentifier = plexMediaServer.getMachineIdentifier();
+		SlashCommandsSetUp slashCommandsSetUp = new SlashCommandsSetUp();
+
 		DiscordApiBuilder builder = new DiscordApiBuilder();
 		builder.setAllIntents();
 		builder.setToken(DISCORD_TOKEN);
@@ -107,51 +100,16 @@ public class Main
 		builder.addServerBecomesAvailableListener(new ServerBecomesAvailable());
 		builder.addListener(new ReactListener(ROLE_ID));
 		builder.addListener(new MessageListener());
-		SlashCommandsSetUp slashCommandsSetUp = new SlashCommandsSetUp();
-
-		logger.info("The current version of the project is " + CURRENT_VERSION);
+		builder.addListener(new RoleListener(friendlyName, machineIdentifier));
 
 		discordApi = builder.login().join();
 
 		logger.info("You can invite me by using the following url: " + discordApi.createBotInvite());
 
-		PlexHTTPClient plexHTTPClient = getPlexHTTPClient();
-		PlexMediaServer plexMediaServer = getPlexMediaServer(plexHTTPClient);
-//		PlexAccount account = getPlexAccount(plexHTTPClient);
-
-
-		String userName = plexMediaServer.getMyPlexUsername();
-		String machineID = plexMediaServer.getMachineIdentifier();
-
-		URL url = new URL("https://plex.tv/api/servers/" +  plexMediaServer.getMachineIdentifier() + "/shared_servers");
-		HttpURLConnection request = (HttpURLConnection ) url.openConnection();
-		request.addRequestProperty("X-Plex-Token", PLEX_KEY);
-		request.addRequestProperty("Content-Type", "application/json");
-		request.setRequestMethod("POST");
-
-		request.setReadTimeout(5000);
-		int status = request.getResponseCode();
-
-		if (status == 200)
-		{
-			BufferedReader in = new BufferedReader(
-				new InputStreamReader(request.getInputStream()));
-			String inputLine;
-			StringBuffer content = new StringBuffer();
-			while ((inputLine = in.readLine()) != null) {
-				content.append(inputLine);
-			}
-			System.out.println(content);
-			in.close();
-		}
-
-		JsonElement root = JsonParser.parseReader(new InputStreamReader((InputStream) request.getContent()));
-
 		discordApi.bulkOverwriteGlobalApplicationCommands(slashCommandsSetUp.getCommands());
 		discordApi.addSlashCommandCreateListener(new PlexListener(plexMediaServer));
 
 		launchScheduledExecutor(discordApi, plexMediaServer);
-
 	}
 
 	public static void launchScheduledExecutor(DiscordApi api, PlexMediaServer plexMediaServer)
@@ -235,12 +193,5 @@ public class Main
 		PlexMediaServer plexMediaServer = new PlexMediaServer(new URI("http://" + IP + ":" + PORT), client, PLEX_KEY);
 
 		return plexMediaServer;
-	}
-
-	private static PlexAccount getPlexAccount(PlexHTTPClient client)
-	{
-		PlexAccount plexAccount = new PlexAccount(client, PLEX_KEY);
-
-		return plexAccount;
 	}
 }
