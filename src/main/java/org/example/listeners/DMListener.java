@@ -98,9 +98,6 @@ public class DMListener implements MessageCreateListener
 		String postUrl = "https://plex.tv/api/servers/" + machineID + "/shared_servers?X-Plex-Token=" + PLEX_KEY;
 		HttpPost httpPost = new HttpPost(postUrl);
 
-		// Add headers to the request
-		httpPost.setHeader("Content-type", "application/json");
-
 		String request = "{" +
 			"  \"server_id\": \"\"," +
 			"  \"shared_server\": {\"library_section_ids\" : " + sections.toString() + ", \"invited_email\": \"" + invitedEmail + "\"}," +

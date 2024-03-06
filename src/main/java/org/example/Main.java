@@ -1,7 +1,12 @@
 package org.example;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -13,6 +18,14 @@ import java.util.regex.Pattern;
 import kekolab.javaplex.PlexHTTPClient;
 import kekolab.javaplex.PlexHTTPClientBuilder;
 import kekolab.javaplex.PlexMediaServer;
+import kekolab.javaplex.PlexMovie;
+import kekolab.javaplex.PlexMovieSection;
+import kekolab.javaplex.PlexServer;
+import kekolab.javaplex.PlexServers;
+import kekolab.javaplex.PlexServersSection;
+import kekolab.javaplex.PlexServersSharedServers;
+import kekolab.javaplex.PlexServersSharedServersInvite;
+import kekolab.javaplex.PlexSharedServer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.example.listeners.MessageListener;
@@ -87,6 +100,36 @@ public class Main
 
 		PlexHTTPClient plexHTTPClient = getPlexHTTPClient();
 		PlexMediaServer plexMediaServer = getPlexMediaServer(plexHTTPClient);
+		PlexServers plexServer = plexMediaServer.plexServer();
+		PlexServersSharedServers plexServersSharedServers = plexMediaServer.plexServersSharedServers();
+		List<PlexServer> items1= plexServer.getServers();
+		List<PlexSharedServer> items2= plexServersSharedServers.getServers();
+//		List<PlexSharedServer> items2 = plexServersSharedServers.get(0).get;
+
+		List<PlexServersSection> sections = items1.get(0).getServersSections();
+
+		PlexSharedServer shareThis = new PlexSharedServer();
+		shareThis.setEmail("jzomerlei+14@gmail.com");
+		shareThis.setPlexServersSharedServersSections(sections);
+
+		try
+		{
+			PlexServersSharedServersInvite sharedInvite = plexServersSharedServers.sendInvite(shareThis);
+			logger.info("worked!");
+		}
+		catch (Exception e)
+		{
+			logger.error(e.getMessage(), e);
+		}
+
+		List<PlexMovie> movies = plexMediaServer.library()
+			.sections() // Get all the sections
+			.stream()
+			.filter(PlexMovieSection.class::isInstance) // Filter out the non-music ones
+			.map(PlexMovieSection.class::cast) // Cast to PlexMusicSections
+			.findAny()
+			.get()
+			.all();
 		String friendlyName = plexMediaServer.getFriendlyName();
 		String machineIdentifier = plexMediaServer.getMachineIdentifier();
 		SlashCommandsSetUp slashCommandsSetUp = new SlashCommandsSetUp();
