@@ -9,10 +9,14 @@ import java.net.URL;
 import java.sql.Date;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import kekolab.javaplex.PlexMediaServer;
+import kekolab.javaplex.PlexServer;
+import kekolab.javaplex.PlexServerShare;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
@@ -30,19 +34,16 @@ import org.xml.sax.InputSource;
 
 public class DMListener implements MessageCreateListener
 {
-	String machineID;
-	JsonArray sections;
 	DiscordApi api;
 	long userID;
+	PlexMediaServer plexMediaServer;
 	Timer timer;
 
-	public DMListener(long userID, String machineID, DiscordApi api) throws Exception
+	public DMListener(DiscordApi api, long userID, PlexMediaServer plexMediaServer) throws Exception
 	{
-		this.machineID = machineID;
-		this.sections = getPlexSections();
 		this.api = api;
 		this.userID = userID;
-		getSharedServers();
+		this.plexMediaServer = plexMediaServer;
 		timer = new Timer();
 		timer.schedule(new StopListener(this), Date.from(Instant.now().plus(86400, ChronoUnit.SECONDS)));
 	}
@@ -91,125 +92,12 @@ public class DMListener implements MessageCreateListener
 
 	private boolean plexInvite(String invitedEmail) throws Exception
 	{
-		// Create an instance of HttpClient
-		CloseableHttpClient httpClient = HttpClientBuilder.create().build();
+		List<PlexServer.Section> sections = plexMediaServer.toPlexServer().getSections();
+		// only keep show and movies
+		sections.removeIf(section -> !section.getType().equals("show") && !section.getType().equals("movie"));
+		PlexServerShare invitedUser = plexMediaServer.toPlexServer().inviteFriend(invitedEmail, sections);
 
-		// Create an instance of HttpPost with the desired URL
-		String postUrl = "https://plex.tv/api/servers/" + machineID + "/shared_servers?X-Plex-Token=" + PLEX_KEY;
-		HttpPost httpPost = new HttpPost(postUrl);
-
-		// Add headers to the request
-		httpPost.setHeader("Content-type", "application/json");
-
-		String request = "{" +
-			"  \"server_id\": \"\"," +
-			"  \"shared_server\": {\"library_section_ids\" : " + sections.toString() + ", \"invited_email\": \"" + invitedEmail + "\"}," +
-			"  \"sharing_settings\":" +
-			"  {" +
-			"    \"allowSync\": \"0\"," +
-			"    \"allowCameraUpload\": \"0\"," +
-			"    \"allowChannels\": \"0\"," +
-			"    \"filterMovies\": {}," +
-			"    \"filterTelevision\": {}," +
-			"    \"filterMusic\": {}" +
-			"  }" +
-			"}";
-
-		// Set the request body
-		StringEntity entity = new StringEntity(request);
-		httpPost.setEntity(entity);
-
-		// Execute the request and obtain the response
-		HttpResponse httpResponse = httpClient.execute(httpPost);
-
-		// Extract the response's content
-		int responseCode = httpResponse.getStatusLine().getStatusCode();
-
-		return responseCode == 200;
-	}
-
-	private JsonArray getPlexSections() throws Exception
-	{
-		URL url = new URL("https://plex.tv/api/servers/" + machineID);
-		HttpURLConnection request = (HttpURLConnection) url.openConnection();
-		request.addRequestProperty("X-Plex-Token", PLEX_KEY);
-		request.addRequestProperty("Content-Type", "application/json");
-		request.setRequestMethod("GET");
-
-		request.setReadTimeout(5000);
-		int status = request.getResponseCode();
-
-		if (status == 200)
-		{
-			BufferedReader in = new BufferedReader(
-				new InputStreamReader(request.getInputStream()));
-			String inputLine;
-			StringBuffer content = new StringBuffer();
-			while ((inputLine = in.readLine()) != null)
-			{
-				content.append(inputLine);
-			}
-
-			DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-			DocumentBuilder builder;
-			JsonArray root = new JsonArray();
-
-			try
-			{
-				builder = factory.newDocumentBuilder();
-				Document document = builder.parse(new InputSource(new StringReader(content.toString())));
-				document.getDocumentElement().normalize();
-				NodeList nodeList = document.getElementsByTagName("Section");
-				for (int i = 0; i < nodeList.getLength(); i++)
-				{
-					Node sectionProps = nodeList.item(i);
-
-					String type = sectionProps.getAttributes().getNamedItem("type").getNodeValue();
-					String value = sectionProps.getAttributes().getNamedItem("id").getNodeValue();
-					if (type.equals("movie"))
-					{
-						root.add(value);
-					}
-					else if (type.equals("show"))
-					{
-						root.add(value);
-					}
-				}
-			}
-			catch (Exception e)
-			{
-				e.printStackTrace();
-			}
-
-			in.close();
-			return root;
-		}
-
-		return new JsonArray();
-	}
-
-	private void getSharedServers() throws Exception
-	{
-		URL url = new URL("https://plex.tv/api/servers/" + machineID + "/shared_servers");//?X-Plex-Token=" + PLEX_KEY);
-		HttpURLConnection request = (HttpURLConnection) url.openConnection();
-		request.addRequestProperty("X-Plex-Token", PLEX_KEY);
-		request.addRequestProperty("Content-Type", "application/json");
-		request.setRequestMethod("GET");
-
-		request.setReadTimeout(5000);
-		int status = request.getResponseCode();
-
-		if (status == 200)
-		{
-			BufferedReader in = new BufferedReader(
-				new InputStreamReader(request.getInputStream()));
-			String inputLine;
-			StringBuffer content = new StringBuffer();
-			while ((inputLine = in.readLine()) != null)
-			{
-				content.append(inputLine);
-			}
-		}
+		return true;
 	}
 
 	private boolean validEmail(String emailAddress)

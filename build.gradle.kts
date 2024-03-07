@@ -27,7 +27,7 @@ dependencies {
 
     runtimeOnly("org.apache.logging.log4j:log4j-core:2.19.0")
 
-    implementation("com.github.kekolab:javaplex:3.1.0")
+    implementation("com.github.kekolab:javaplex:3.3.0")
 }
 
 application {

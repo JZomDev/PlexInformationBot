@@ -87,8 +87,6 @@ public class Main
 
 		PlexHTTPClient plexHTTPClient = getPlexHTTPClient();
 		PlexMediaServer plexMediaServer = getPlexMediaServer(plexHTTPClient);
-		String friendlyName = plexMediaServer.getFriendlyName();
-		String machineIdentifier = plexMediaServer.getMachineIdentifier();
 		SlashCommandsSetUp slashCommandsSetUp = new SlashCommandsSetUp();
 
 		DiscordApiBuilder builder = new DiscordApiBuilder();
@@ -100,7 +98,7 @@ public class Main
 		builder.addServerBecomesAvailableListener(new ServerBecomesAvailable());
 		builder.addListener(new ReactListener(ROLE_ID));
 		builder.addListener(new MessageListener());
-		builder.addListener(new RoleListener(friendlyName, machineIdentifier));
+		builder.addListener(new RoleListener(plexMediaServer));
 
 		discordApi = builder.login().join();
 
