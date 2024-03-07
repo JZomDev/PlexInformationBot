@@ -28,7 +28,7 @@ public class Main
 {
 
 	public static final String DISCORD_MESSAGE = "React to this message to get your roles!";
-	private static final String CURRENT_VERSION = "1.1.0";
+	private static final String CURRENT_VERSION = "1.2.0";
 	private static final Logger logger = LogManager.getLogger(Main.class);
 	public static String DISCORD_TOKEN = "";
 	public static String IP = "";
