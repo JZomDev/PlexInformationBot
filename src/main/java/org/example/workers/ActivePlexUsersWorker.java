@@ -24,20 +24,13 @@ public class ActivePlexUsersWorker
 					int totalTotal = mediatags.size();
 					int directPlayTotal = 0;
 					int transcodeTotal = 0;
-					int directPlayMovie = 0;
-					int transcodeMovie = 0;
-					int directPlayEpisode = 0;
-					int transcodeEpisode = 0;
-					for (int i = 0; i < mediatags.size(); i++)
+					for (PlexMediatag<?> plexMediatag : mediatags)
 					{
-						PlexMediatag plexMediatag = mediatags.get(i);
-						if (plexMediatag instanceof PlexMovie b)
+						if (plexMediatag instanceof PlexMovie plexMovie)
 						{
-							b.getMedia().size();
-
-							for (int j = 0; j < b.getMedia().size(); j++)
+							for (int j = 0; j < plexMovie.getMedia().size(); j++)
 							{
-								List<PlexPart> plexParts = b.getMedia().get(0).getParts();
+								List<PlexPart> plexParts = plexMovie.getMedia().get(0).getParts();
 
 								for (int jj = 0; jj < plexParts.size(); jj++)
 								{
@@ -45,36 +38,29 @@ public class ActivePlexUsersWorker
 									if (p.getDecision().equals("directplay"))
 									{
 										directPlayTotal++;
-										directPlayMovie++;
 									}
 									else
 									{
 										transcodeTotal++;
-										transcodeMovie++;
 									}
 								}
 							}
 						}
-						if (plexMediatag instanceof PlexEpisode b)
+						if (plexMediatag instanceof PlexEpisode plexEpisode)
 						{
-							b.getMedia().size();
-
-							for (int j = 0; j < b.getMedia().size(); j++)
+							for (int j = 0; j < plexEpisode.getMedia().size(); j++)
 							{
-								List<PlexPart> plexParts = b.getMedia().get(0).getParts();
+								List<PlexPart> plexParts = plexEpisode.getMedia().get(0).getParts();
 
-								for (int jj = 0; jj < plexParts.size(); jj++)
+								for (PlexPart p : plexParts)
 								{
-									PlexPart p = plexParts.get(jj);
 									if (p.getDecision().equals("directplay"))
 									{
 										directPlayTotal++;
-										directPlayEpisode++;
 									}
 									else
 									{
 										transcodeTotal++;
-										transcodeEpisode++;
 									}
 								}
 							}

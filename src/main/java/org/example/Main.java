@@ -9,6 +9,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 import kekolab.javaplex.PlexHTTPClient;
 import kekolab.javaplex.PlexHTTPClientBuilder;
 import kekolab.javaplex.PlexMediaServer;
@@ -17,6 +18,7 @@ import org.apache.logging.log4j.Logger;
 import org.example.listeners.MessageListener;
 import org.example.listeners.PlexListener;
 import org.example.listeners.ReactListener;
+import org.example.listeners.RoleListener;
 import org.example.listeners.ServerBecomesAvailable;
 import org.example.workers.CountPlexUsersWorker;
 import org.javacord.api.DiscordApi;
@@ -26,14 +28,16 @@ public class Main
 {
 
 	public static final String DISCORD_MESSAGE = "React to this message to get your roles!";
-	private static final String CURRENT_VERSION = "1.0.0";
+	private static final String CURRENT_VERSION = "1.1.0";
 	private static final Logger logger = LogManager.getLogger(Main.class);
 	public static String DISCORD_TOKEN = "";
 	public static String IP = "";
 	public static String PORT = "";
 	public static String PLEX_KEY = "";
 	public static String ROLE_ID = "";
-
+	public static String VALID_EMAIL_ADDRESS_REGEX = "^(?=.{1,64}@)[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*@"
+		+ "[^-][A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*(\\.[A-Za-z]{2,})$";
+	public static Pattern PATTERN_MATCH = Pattern.compile(VALID_EMAIL_ADDRESS_REGEX, Pattern.CASE_INSENSITIVE);
 	static DiscordApi discordApi = null;
 	private static ScheduledExecutorService mService;
 
@@ -79,6 +83,12 @@ public class Main
 			return;
 		}
 
+		logger.info("The current version of the project is " + CURRENT_VERSION);
+
+		PlexHTTPClient plexHTTPClient = getPlexHTTPClient();
+		PlexMediaServer plexMediaServer = getPlexMediaServer(plexHTTPClient);
+		SlashCommandsSetUp slashCommandsSetUp = new SlashCommandsSetUp();
+
 		DiscordApiBuilder builder = new DiscordApiBuilder();
 		builder.setAllIntents();
 		builder.setToken(DISCORD_TOKEN);
@@ -88,22 +98,16 @@ public class Main
 		builder.addServerBecomesAvailableListener(new ServerBecomesAvailable());
 		builder.addListener(new ReactListener(ROLE_ID));
 		builder.addListener(new MessageListener());
-		SlashCommandsSetUp slashCommandsSetUp = new SlashCommandsSetUp();
-
-		logger.info("The current version of the project is " + CURRENT_VERSION);
+		builder.addListener(new RoleListener(plexMediaServer));
 
 		discordApi = builder.login().join();
 
 		logger.info("You can invite me by using the following url: " + discordApi.createBotInvite());
 
-		PlexHTTPClient plexHTTPClient = getPlexHTTPClient();
-		PlexMediaServer plexMediaServer = getPlexMediaServer(plexHTTPClient);
-
 		discordApi.bulkOverwriteGlobalApplicationCommands(slashCommandsSetUp.getCommands());
 		discordApi.addSlashCommandCreateListener(new PlexListener(plexMediaServer));
 
 		launchScheduledExecutor(discordApi, plexMediaServer);
-
 	}
 
 	public static void launchScheduledExecutor(DiscordApi api, PlexMediaServer plexMediaServer)

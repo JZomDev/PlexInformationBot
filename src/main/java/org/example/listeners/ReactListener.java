@@ -53,11 +53,15 @@ public class ReactListener implements ReactionAddListener, ReactionRemoveListene
 				Role presentRole = role.get();
 				if (!event.getUser().get().getRoles(server).contains(presentRole))
 				{
-					userReacted.addRole(presentRole).exceptionally((e) ->
-					{
-						logger.error("Failed to assign role\n" + e.getMessage(), e);
-						return null;
-					});
+					userReacted.addRole(presentRole)
+						.whenComplete((unused, throwable) -> {
+							logger.info("Assigned role");
+						})
+						.exceptionally((e) ->
+						{
+							logger.error("Failed to assign role\n" + e.getMessage(), e);
+							return null;
+						});
 				}
 			}
 		}
@@ -88,7 +92,10 @@ public class ReactListener implements ReactionAddListener, ReactionRemoveListene
 		{
 			Optional<Role> role = server.getRoleById(roleID);
 
-			role.ifPresent(value -> userReacted.removeRole(value).exceptionally((e) ->
+			role.ifPresent(value -> userReacted.removeRole(value).whenComplete((unused, error) -> {
+					logger.info("Removed role");
+				}
+			).exceptionally((e) ->
 			{
 				logger.error("Failed to remove role\n" + e.getMessage(), e);
 				return null;
