@@ -21,8 +21,11 @@ import org.example.listeners.ReactListener;
 import org.example.listeners.RoleListener;
 import org.example.listeners.ServerBecomesAvailable;
 import org.example.workers.CountPlexUsersWorker;
+import org.example.workers.PlexInformationWorker;
 import org.javacord.api.DiscordApi;
 import org.javacord.api.DiscordApiBuilder;
+import org.javacord.api.entity.channel.TextChannel;
+import org.javacord.api.entity.message.Message;
 
 public class Main
 {
@@ -35,6 +38,9 @@ public class Main
 	public static String PORT = "";
 	public static String PLEX_KEY = "";
 	public static String ROLE_ID = "";
+	public static String TEXT_CHANNELID = "";
+	public static String MESSAGEID = "";
+	public static String API_KEY = "";
 	public static String VALID_EMAIL_ADDRESS_REGEX = "^(?=.{1,64}@)[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*@"
 		+ "[^-][A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*(\\.[A-Za-z]{2,})$";
 	public static Pattern PATTERN_MATCH = Pattern.compile(VALID_EMAIL_ADDRESS_REGEX, Pattern.CASE_INSENSITIVE);
@@ -66,6 +72,18 @@ public class Main
 			if (envName.equals("ROLE_ID"))
 			{
 				ROLE_ID = env_var.get(envName);
+			}
+			if (envName.equals("TEXT_CHANNELID"))
+			{
+				TEXT_CHANNELID = env_var.get(envName);
+			}
+			if (envName.equals("MESSAGEID"))
+			{
+				MESSAGEID = env_var.get(envName);
+			}
+			if (envName.equals("API_KEY"))
+			{
+				API_KEY = env_var.get(envName);
 			}
 		}
 	}
@@ -120,6 +138,16 @@ public class Main
 				// Perform your recurring method calls in here.
 				try
 				{
+					PlexInformationWorker plexInformationWorker = new PlexInformationWorker();
+
+					TextChannel textChannel = api.getTextChannelById(TEXT_CHANNELID).get();
+
+					Message message = api.getMessageById(MESSAGEID, textChannel).join();
+
+					if (message != null)
+					{
+						message.edit(plexInformationWorker.execute(api).join()).join();
+					}
 					CountPlexUsersWorker countPlexUsersWorker = new CountPlexUsersWorker();
 					api.updateActivity(countPlexUsersWorker.execute(api, plexMediaServer).join());
 				}

@@ -7,6 +7,7 @@ import kekolab.javaplex.PlexMediaServer;
 import kekolab.javaplex.PlexMediatag;
 import kekolab.javaplex.PlexMovie;
 import kekolab.javaplex.PlexPart;
+import kekolab.javaplex.PlexVideoStream;
 import org.javacord.api.DiscordApi;
 
 public class CountPlexUsersWorker
@@ -66,15 +67,23 @@ public class CountPlexUsersWorker
 								for (int jj = 0; jj < plexParts.size(); jj++)
 								{
 									PlexPart p = plexParts.get(jj);
-									if (p.getDecision().equals("directplay"))
+									String decision = p.getDecision();
+									if (decision == null)
 									{
-										directPlayTotal++;
-										directPlayEpisode++;
+										// cannot get the decision for some reason, cringe
 									}
 									else
 									{
-										transcodeTotal++;
-										transcodeEpisode++;
+										if (p.getDecision().equals("directplay"))
+										{
+											directPlayTotal++;
+											directPlayEpisode++;
+										}
+										else
+										{
+											transcodeTotal++;
+											transcodeEpisode++;
+										}
 									}
 								}
 							}
