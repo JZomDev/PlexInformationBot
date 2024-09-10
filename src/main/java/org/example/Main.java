@@ -150,12 +150,10 @@ public class Main
 						{
 							if (err == null)
 							{
-								msg.edit(embedBuilder).whenComplete((m, e) ->
-								{
-									LocalDateTime myObj = LocalDateTime.now();
-									i.getAndIncrement();
-									logger.info("Message was modified at {} for the {} time", myObj.toString(), i.get());
-								});
+								msg.edit(embedBuilder).join();
+								LocalDateTime myObj = LocalDateTime.now();
+								i.getAndIncrement();
+								logger.info("Message was modified at {} for the {} time", myObj.toString(), i.get());
 							}
 							else
 							{
