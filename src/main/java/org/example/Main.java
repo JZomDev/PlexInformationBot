@@ -195,7 +195,7 @@ public class Main
 				}
 			},
 			0, // How long to delay the start
-			5, // How long between executions
+			15, // How long between executions
 			TimeUnit.SECONDS); // The time unit used
 	}
 
