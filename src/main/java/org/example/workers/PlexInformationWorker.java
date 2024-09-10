@@ -12,8 +12,10 @@ import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import static org.example.Main.API_KEY;
@@ -88,16 +90,21 @@ public class PlexInformationWorker
 							stringBuilder.append(":eyes: ").append(friendlyName).append("\n");
 							stringBuilder.append(":gear: ").append(quality_profile).append("(").append(video_full_resolution).append(") | @").append(bandwidthFormat).append("Mbps").append("\n");
 
-							long millis1 = view_offset;
-							long elapsedMinutes = (millis1 / 1000)  / 60;
-							int elapsedSeconds = (int)((millis1 / 1000) % 60);
+							ArrayList<Long> elapsedTime = getIntervalTime(view_offset);
+							long elapsedHours = elapsedTime.get(0);
+							long elapsedMinutes = elapsedTime.get(1);
+							long elapsedSeconds = elapsedTime.get(2);
 
+							ArrayList<Long> duraTime = getIntervalTime(stream_duration);
 
-							long millis2 = stream_duration;
-							long duraMinutes = (millis2 / 1000)  / 60;
-							int duraSeconds = (int)((millis2 / 1000) % 60);
+							long duraHours = duraTime.get(0);
+							long duraMinutes = duraTime.get(1);
+							long duraSeconds = duraTime.get(2);
 
-							stringBuilder.append(":alarm_clock: ").append(elapsedMinutes).append(":").append(numberFormat2.format(elapsedSeconds)).append(" / ").append(duraMinutes).append(":").append(numberFormat2.format(duraSeconds));
+							String elapsedTimeStr = elapsedHours > 0 ? elapsedHours + ":" + numberFormat2.format(elapsedMinutes) + ":" + numberFormat2.format(elapsedSeconds) : elapsedMinutes + ":" + numberFormat2.format(elapsedSeconds);
+							String duraTimeStr = duraHours > 0 ? duraHours + ":" + numberFormat2.format(duraMinutes) + ":" + numberFormat2.format(duraSeconds) : duraMinutes + ":" + numberFormat2.format(duraSeconds);
+
+							stringBuilder.append(":alarm_clock: ").append(elapsedTimeStr).append(" / ").append(duraTimeStr);
 
 							stringBuilder.append("\n");
 
@@ -123,5 +130,24 @@ public class PlexInformationWorker
 			return embed;
 
 			}, api.getThreadPool().getExecutorService());
+	}
+
+	public static ArrayList<Long> getIntervalTime(long longInterval) {
+
+		long intMillis = longInterval;
+		long dd = TimeUnit.MILLISECONDS.toDays(intMillis);
+		intMillis -= TimeUnit.DAYS.toMillis(dd);
+		long hh = TimeUnit.MILLISECONDS.toHours(intMillis);
+		intMillis -= TimeUnit.HOURS.toMillis(hh);
+		long mm = TimeUnit.MILLISECONDS.toMinutes(intMillis);
+		intMillis -= TimeUnit.MINUTES.toMillis(mm);
+		long ss = TimeUnit.MILLISECONDS.toSeconds(intMillis);
+		intMillis -= TimeUnit.SECONDS.toMillis(ss);
+
+		ArrayList<Long> returnThis = new ArrayList<>();
+		returnThis.add(hh);
+		returnThis.add(mm);
+		returnThis.add(ss);
+		return returnThis;
 	}
 }

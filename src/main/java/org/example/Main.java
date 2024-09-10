@@ -26,12 +26,13 @@ import org.javacord.api.DiscordApi;
 import org.javacord.api.DiscordApiBuilder;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.Message;
+import org.javacord.api.entity.message.embed.EmbedBuilder;
 
 public class Main
 {
 
 	public static final String DISCORD_MESSAGE = "React to this message to get your roles!";
-	private static final String CURRENT_VERSION = "2.0.1";
+	private static final String CURRENT_VERSION = "2.1.0";
 	private static final Logger logger = LogManager.getLogger(Main.class);
 	public static String DISCORD_TOKEN = "";
 	public static String IP = "";
@@ -95,13 +96,13 @@ public class Main
 	 */
 	public static void main(String[] args) throws Exception
 	{
-		if (DISCORD_TOKEN.equals(""))
+		if (DISCORD_TOKEN.isEmpty())
 		{
 			logger.error("Failed to start Discord bot. No Discord token supplied");
 			return;
 		}
 
-		logger.info("The current version of the project is " + CURRENT_VERSION);
+		logger.info("The current version of the project is {}", CURRENT_VERSION);
 
 		PlexHTTPClient plexHTTPClient = getPlexHTTPClient();
 		PlexMediaServer plexMediaServer = getPlexMediaServer(plexHTTPClient);
@@ -120,7 +121,7 @@ public class Main
 
 		discordApi = builder.login().join();
 
-		logger.info("You can invite me by using the following url: " + discordApi.createBotInvite());
+		logger.info("You can invite me by using the following url: {}", discordApi.createBotInvite());
 
 		discordApi.bulkOverwriteGlobalApplicationCommands(slashCommandsSetUp.getCommands());
 		discordApi.addSlashCommandCreateListener(new PlexListener(plexMediaServer));
@@ -139,17 +140,35 @@ public class Main
 				try
 				{
 					PlexInformationWorker plexInformationWorker = new PlexInformationWorker();
-
+					CountPlexUsersWorker countPlexUsersWorker = new CountPlexUsersWorker();
 					TextChannel textChannel = api.getTextChannelById(TEXT_CHANNELID).get();
 
-					Message message = api.getMessageById(MESSAGEID, textChannel).join();
-
-					if (message != null)
+					plexInformationWorker.execute(api).whenComplete(((embedBuilder, throwable) ->
 					{
-						message.edit(plexInformationWorker.execute(api).join()).join();
-					}
-					CountPlexUsersWorker countPlexUsersWorker = new CountPlexUsersWorker();
-					api.updateActivity(countPlexUsersWorker.execute(api, plexMediaServer).join());
+						api.getMessageById(MESSAGEID, textChannel).whenComplete((msg, err) ->
+						{
+							if (err == null)
+							{
+								msg.edit(embedBuilder);
+							}
+							else
+							{
+								logger.error(err.getMessage(), err);
+							}
+						});
+					}));
+
+					countPlexUsersWorker.execute(api, plexMediaServer).whenComplete((str, err) ->
+					{
+						if (err == null)
+						{
+							api.updateActivity(str);
+						}
+						else
+						{
+							logger.error(err.getMessage(), err);
+						}
+					});
 				}
 				catch (Exception e)
 				{
