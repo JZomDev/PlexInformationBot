@@ -2,6 +2,7 @@ package org.example;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -9,6 +10,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import kekolab.javaplex.PlexHTTPClient;
 import kekolab.javaplex.PlexHTTPClientBuilder;
@@ -25,8 +27,6 @@ import org.example.workers.PlexInformationWorker;
 import org.javacord.api.DiscordApi;
 import org.javacord.api.DiscordApiBuilder;
 import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.message.embed.EmbedBuilder;
 
 public class Main
 {
@@ -135,6 +135,7 @@ public class Main
 		{
 			mService = Executors.newScheduledThreadPool(1);
 		}
+		AtomicInteger i = new AtomicInteger();
 		mService.scheduleAtFixedRate(() -> {
 				// Perform your recurring method calls in here.
 				try
@@ -149,7 +150,12 @@ public class Main
 						{
 							if (err == null)
 							{
-								msg.edit(embedBuilder);
+								msg.edit(embedBuilder).whenComplete((m, e) ->
+								{
+									LocalDateTime myObj = LocalDateTime.now();
+									i.getAndIncrement();
+									logger.info("Message was modified at {} for the {} time", myObj.toString(), i.get());
+								});
 							}
 							else
 							{
