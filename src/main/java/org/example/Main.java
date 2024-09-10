@@ -133,15 +133,48 @@ public class Main
 	{
 		if (mService == null || mService.isShutdown())
 		{
-			mService = Executors.newScheduledThreadPool(1);
+			mService = Executors.newScheduledThreadPool(2);
 		}
 		AtomicInteger i = new AtomicInteger();
 		mService.scheduleAtFixedRate(() -> {
 				// Perform your recurring method calls in here.
 				try
 				{
-					PlexInformationWorker plexInformationWorker = new PlexInformationWorker();
 					CountPlexUsersWorker countPlexUsersWorker = new CountPlexUsersWorker();
+					countPlexUsersWorker.execute(api, plexMediaServer).whenComplete((str, err) ->
+					{
+						if (err == null)
+						{
+							api.updateActivity(str);
+						}
+						else
+						{
+							logger.error(err.getMessage(), err);
+						}
+					});
+				}
+				catch (Exception e)
+				{
+					try
+					{
+						finishExecutor().join();
+					}
+					catch (Exception e2)
+					{
+						throw new RuntimeException(e2);
+					}
+					logger.error(e.getMessage(), e);
+				}
+			},
+			0, // How long to delay the start
+			5, // How long between executions
+			TimeUnit.SECONDS); // The time unit used
+		
+		mService.scheduleAtFixedRate(() -> {
+				// Perform your recurring method calls in here.
+				try
+				{
+					PlexInformationWorker plexInformationWorker = new PlexInformationWorker();
 					TextChannel textChannel = api.getTextChannelById(TEXT_CHANNELID).get();
 
 					plexInformationWorker.execute(api).whenComplete(((embedBuilder, throwable) ->
@@ -162,17 +195,6 @@ public class Main
 						});
 					}));
 
-					countPlexUsersWorker.execute(api, plexMediaServer).whenComplete((str, err) ->
-					{
-						if (err == null)
-						{
-							api.updateActivity(str);
-						}
-						else
-						{
-							logger.error(err.getMessage(), err);
-						}
-					});
 				}
 				catch (Exception e)
 				{
