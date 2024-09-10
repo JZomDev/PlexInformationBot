@@ -145,20 +145,27 @@ public class Main
 
 					plexInformationWorker.execute(api).whenComplete(((embedBuilder, throwable) ->
 					{
-						api.getMessageById(MESSAGEID, textChannel).whenComplete((msg, err) ->
+						if (throwable == null)
 						{
-							if (err == null)
+							api.getMessageById(MESSAGEID, textChannel).whenComplete((msg, err) ->
 							{
-								msg.edit(embedBuilder).join();
-								LocalDateTime myObj = LocalDateTime.now();
-								i.getAndIncrement();
-								logger.info("Message was modified at {} for the {} time", myObj.toString(), i.get());
-							}
-							else
-							{
-								logger.error(err.getMessage(), err);
-							}
-						});
+								if (err == null)
+								{
+									msg.edit(embedBuilder);
+									LocalDateTime myObj = LocalDateTime.now();
+									i.getAndIncrement();
+									logger.info("Message was modified at {} for the {} time", myObj.toString(), i.get());
+								}
+								else
+								{
+									logger.error(err.getMessage(), err);
+								}
+							});
+						}
+						else
+						{
+							logger.error(throwable.getMessage(), throwable);
+						}
 					}));
 
 					CountPlexUsersWorker countPlexUsersWorker = new CountPlexUsersWorker();
