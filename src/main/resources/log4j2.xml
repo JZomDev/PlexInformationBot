@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Configuration name="Plex Info Bot" status="INFO" strict="true">
+	<Properties>
+		<Property name="LOG_DIR">/var/log</Property>
+	</Properties>
+
 	<Appenders>
 		<Console name="Console Appender">
 			<PatternLayout>
@@ -9,11 +13,22 @@
 				<ThresholdFilter level="INFO"/>
 			</Filters>
 		</Console>
-		<File name="File Appender" fileName="log/plexinfo-bot.log" createOnDemand="true">
+		<RollingFile
+				name="File Appender"
+				fileName="${LOG_DIR}/plexinfobot.log"
+				filePattern="${LOG_DIR}/plexinfobot.%d{dd-MMM-yyyy}.log"
+				ignoreExceptions="false">
 			<PatternLayout>
-				<Pattern><![CDATA[%d <%-5p> <%-35.35t> <%x> <%X> <%50.50c> %m%n]]></Pattern>
+				<Pattern>%d{yyyy-MM-dd HH:mm:ss} %-5p %m%n</Pattern>
 			</PatternLayout>
-		</File>
+			<Filters>
+				<ThresholdFilter level="INFO"/>
+			</Filters>
+			<Policies>
+				<TimeBasedTriggeringPolicy interval="1"/>
+			</Policies>
+			<DefaultRolloverStrategy max="5" />
+		</RollingFile>
 	</Appenders>
 	<Loggers>
 		<Root level="DEBUG">
