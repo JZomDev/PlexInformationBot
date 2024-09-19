@@ -33,7 +33,7 @@ public class PlexInformationWorker
 	{
 		return CompletableFuture.supplyAsync(() -> {
 			EmbedBuilder embed = new EmbedBuilder();
-			String title = "";
+			String activtyTitle = "";
 			Instant time = Instant.now();
 			String updatedTime = formatter.format(Date.from(time));
 			try
@@ -56,11 +56,11 @@ public class PlexInformationWorker
 					StringBuilder stringBuilder = new StringBuilder();
 					if (streamCount == 0)
 					{
-						title = "No current activity";
+						activtyTitle = "No current activity";
 					}
 					else
 					{
-						title = "Current activity on Redrum's Ark";
+						activtyTitle = "Current activity on Redrum's Ark";
 						JsonArray streams = data.getAsJsonObject().get("sessions").getAsJsonArray();
 						for (int i = 0; i < streams.size(); i++)
 						{
@@ -86,7 +86,21 @@ public class PlexInformationWorker
 							String stateStr = state.equals("paused") ? ":pause_button:" : ":arrow_forward:";
 
 							String mediaChoice = media_type.equals("episode") ? ":tv:" : ":cinema:";
-							stringBuilder.append(String.valueOf(i + 1)).append(" - ").append(mediaChoice).append(" | ").append(stateStr).append(" ").append(full_title).append("\n");
+							if (mediaChoice.equals(":tv:"))
+							{
+								String grandparent_title = stream.get("grandparent_title").getAsString(); // tv title
+								String title = stream.get("title").getAsString(); // tv episode name
+								String seasonNumber = stream.get("parent_media_index").getAsString(); // tv episode name
+								String episodeNumber = stream.get("media_index").getAsString(); // tv episode name
+								stringBuilder.append(String.valueOf(i + 1)).append(" - ").append(mediaChoice)
+									.append(" | ").append(stateStr)
+									.append(" ").append(grandparent_title)
+									.append(" (S").append(seasonNumber).append(" E").append(episodeNumber).append(") -").append(title).append("\n");
+							}
+							else
+							{
+								stringBuilder.append(String.valueOf(i + 1)).append(" - ").append(mediaChoice).append(" | ").append(stateStr).append(" ").append(full_title).append("\n");
+							}
 							stringBuilder.append(":eyes: ").append(friendlyName).append("\n");
 							stringBuilder.append(":gear: ").append(quality_profile).append("(").append(video_full_resolution).append(") | @").append(bandwidthFormat).append("Mbps").append("\n");
 
@@ -124,7 +138,7 @@ public class PlexInformationWorker
 			{
 				log.error(e.getMessage(), e);
 			}
-			embed.setTitle(title);
+			embed.setTitle(activtyTitle);
 			embed.setFooter("Updated " + updatedTime);
 			embed.setAuthor(api.getYourself());
 			return embed;
