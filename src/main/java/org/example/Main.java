@@ -110,6 +110,17 @@ public class Main
 		logger.info("The current version of the project is {}", CURRENT_VERSION);
 
 		PlexMediaServer plexMediaServer = getPlexMediaServer(getPlexApi());
+		for (int i = 0; i < 100 && plexMediaServer.getFriendlyName() == null; i++)
+		{
+			logger.error("Friendly name was null trying again {}", i);
+			plexMediaServer = getPlexMediaServer(getPlexApi());
+			Thread.sleep(100);
+		}
+		if (plexMediaServer.getFriendlyName() == null)
+		{
+			logger.error("Failed to start Discord bot.");
+			return;
+		}
 		SlashCommandsSetUp slashCommandsSetUp = new SlashCommandsSetUp();
 
 		DiscordApiBuilder builder = new DiscordApiBuilder();
