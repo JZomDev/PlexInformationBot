@@ -16,7 +16,7 @@ java {
 
 repositories {
     mavenCentral()
-    maven("https://jitpack.io")
+    maven { url = uri("https://jitpack.io") }
 }
 
 dependencies {
@@ -27,7 +27,7 @@ dependencies {
 
     runtimeOnly("org.apache.logging.log4j:log4j-core:2.19.0")
 
-    implementation("com.github.kekolab:javaplex:3.3.0")
+    implementation("com.github.kekolab:javaplex:6.0.1")
 }
 
 application {

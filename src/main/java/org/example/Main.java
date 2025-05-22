@@ -12,8 +12,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
-import kekolab.javaplex.PlexHTTPClient;
-import kekolab.javaplex.PlexHTTPClientBuilder;
+import kekolab.javaplex.PlexApi;
+import kekolab.javaplex.PlexDevice;
 import kekolab.javaplex.PlexMediaServer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -42,6 +42,7 @@ public class Main
 	public static String TEXT_CHANNELID = "";
 	public static String MESSAGEID = "";
 	public static String API_KEY = "";
+	public static String TAUTULLI_URL = "";
 	public static String VALID_EMAIL_ADDRESS_REGEX = "^(?=.{1,64}@)[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*@"
 		+ "[^-][A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*(\\.[A-Za-z]{2,})$";
 	public static Pattern PATTERN_MATCH = Pattern.compile(VALID_EMAIL_ADDRESS_REGEX, Pattern.CASE_INSENSITIVE);
@@ -86,6 +87,10 @@ public class Main
 			{
 				API_KEY = env_var.get(envName);
 			}
+			if (envName.equals("TAUTULLI_URL"))
+			{
+				TAUTULLI_URL = env_var.get(envName);
+			}
 		}
 	}
 
@@ -104,8 +109,7 @@ public class Main
 
 		logger.info("The current version of the project is {}", CURRENT_VERSION);
 
-		PlexHTTPClient plexHTTPClient = getPlexHTTPClient();
-		PlexMediaServer plexMediaServer = getPlexMediaServer(plexHTTPClient);
+		PlexMediaServer plexMediaServer = getPlexMediaServer(getPlexApi());
 		SlashCommandsSetUp slashCommandsSetUp = new SlashCommandsSetUp();
 
 		DiscordApiBuilder builder = new DiscordApiBuilder();
@@ -143,7 +147,7 @@ public class Main
 					PlexInformationWorker plexInformationWorker = new PlexInformationWorker();
 					TextChannel textChannel = api.getTextChannelById(TEXT_CHANNELID).get();
 
-					plexInformationWorker.execute(api).whenComplete(((embedBuilder, throwable) ->
+					plexInformationWorker.execute(api, TAUTULLI_URL, plexMediaServer).whenComplete(((embedBuilder, throwable) ->
 					{
 						if (throwable == null)
 						{
@@ -235,19 +239,18 @@ public class Main
 		}
 	}
 
-	private static PlexHTTPClient getPlexHTTPClient()
+	private static PlexApi getPlexApi()
 	{
-		PlexHTTPClient plexPlexHTTPClient = new PlexHTTPClientBuilder()
-			.withPlexDeviceName("Plex Information Bot")
-			.build();
-
-		return plexPlexHTTPClient;
+		PlexApi.Builder apiBuilder = PlexApi.Builder.withDefaultHttpClient();
+		apiBuilder.withPlexDeviceName("Plex Information Bot");
+		PlexApi api = apiBuilder.build();
+		api.withToken(PLEX_KEY);
+		return api;
 	}
 
-	private static PlexMediaServer getPlexMediaServer(PlexHTTPClient client) throws URISyntaxException
+	private static PlexMediaServer getPlexMediaServer(PlexApi api) throws URISyntaxException
 	{
-		PlexMediaServer plexMediaServer = new PlexMediaServer(new URI("http://" + IP + ":" + PORT), client, PLEX_KEY);
-
+		PlexMediaServer plexMediaServer = api.getMediaServer(new URI("http://" + IP + ":" + PORT));
 		return plexMediaServer;
 	}
 }

@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import kekolab.javaplex.PlexMediaServer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import static org.example.Main.API_KEY;
@@ -29,7 +30,7 @@ public class PlexInformationWorker
 	NumberFormat numberFormat = new DecimalFormat("#0.00");
 	NumberFormat numberFormat2 = new DecimalFormat("#00");
 
-	public CompletableFuture<EmbedBuilder> execute(DiscordApi api)
+	public CompletableFuture<EmbedBuilder> execute(DiscordApi api, String tautulliURL, PlexMediaServer plexMediaServer)
 	{
 		return CompletableFuture.supplyAsync(() -> {
 			EmbedBuilder embed = new EmbedBuilder();
@@ -39,7 +40,7 @@ public class PlexInformationWorker
 			try
 			{
 				String apikey = API_KEY;
-				String urlStr = "http://192.168.1.132:8181/api/v2?apikey=" + apikey + "&cmd=get_activity";
+				String urlStr = "http://" + tautulliURL + "/api/v2?apikey=" + apikey + "&cmd=get_activity";
 				URL url = new URL(urlStr);
 				URLConnection request = url.openConnection();
 				request.connect();
@@ -60,7 +61,7 @@ public class PlexInformationWorker
 					}
 					else
 					{
-						activtyTitle = "Current activity on Redrum's Ark";
+						activtyTitle = "Current activity on " + plexMediaServer.getFriendlyName();
 						JsonArray streams = data.getAsJsonObject().get("sessions").getAsJsonArray();
 						for (int i = 0; i < streams.size(); i++)
 						{

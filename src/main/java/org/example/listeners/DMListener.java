@@ -1,36 +1,18 @@
 package org.example.listeners;
 
-import com.google.gson.JsonArray;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.StringReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.sql.Date;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
 import kekolab.javaplex.PlexMediaServer;
 import kekolab.javaplex.PlexServer;
 import kekolab.javaplex.PlexServerShare;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
 import org.example.Main;
-import static org.example.Main.PLEX_KEY;
 import org.javacord.api.DiscordApi;
 import org.javacord.api.event.message.MessageCreateEvent;
 import org.javacord.api.listener.message.MessageCreateListener;
-import org.w3c.dom.Document;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
-import org.xml.sax.InputSource;
 
 public class DMListener implements MessageCreateListener
 {
@@ -95,7 +77,7 @@ public class DMListener implements MessageCreateListener
 		List<PlexServer.Section> sections = plexMediaServer.toPlexServer().getSections();
 		// only keep show and movies
 		sections.removeIf(section -> !section.getType().equals("show") && !section.getType().equals("movie"));
-		PlexServerShare invitedUser = plexMediaServer.toPlexServer().inviteFriend(invitedEmail, sections);
+		PlexServerShare invitedUser = plexMediaServer.toPlexServer().serverShares().inviteFriend(invitedEmail, sections);
 
 		return true;
 	}
