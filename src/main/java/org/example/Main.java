@@ -13,7 +13,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import kekolab.javaplex.PlexApi;
-import kekolab.javaplex.PlexDevice;
 import kekolab.javaplex.PlexMediaServer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -158,7 +157,7 @@ public class Main
 					PlexInformationWorker plexInformationWorker = new PlexInformationWorker();
 					TextChannel textChannel = api.getTextChannelById(TEXT_CHANNELID).get();
 
-					plexInformationWorker.execute(api, TAUTULLI_URL, plexMediaServer).whenComplete(((embedBuilder, throwable) ->
+					plexInformationWorker.execute(api, plexMediaServer).whenComplete(((embedBuilder, throwable) ->
 					{
 						if (throwable == null)
 						{
