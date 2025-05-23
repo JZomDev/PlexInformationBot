@@ -7,11 +7,12 @@ import kekolab.javaplex.PlexMediaServer;
 import kekolab.javaplex.PlexMediatag;
 import kekolab.javaplex.PlexMovie;
 import kekolab.javaplex.PlexPart;
+import org.example.Main;
 import org.javacord.api.DiscordApi;
 
 public class ActivePlexUsersWorker
 {
-	public CompletableFuture<String> execute(DiscordApi api, PlexMediaServer plexMediaServer)
+	public CompletableFuture<String> execute(DiscordApi api)
 	{
 		return CompletableFuture.supplyAsync(() -> {
 			try
@@ -19,7 +20,7 @@ public class ActivePlexUsersWorker
 				try
 				{
 
-					List<PlexMediatag<?>> mediatags = plexMediaServer.status().sessions(); // A list of all the items being streamed
+					List<PlexMediatag<?>> mediatags = Main.getSessions(); // A list of all the items being streamed
 
 					int totalTotal = mediatags.size();
 					int directPlayTotal = 0;

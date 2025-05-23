@@ -3,6 +3,7 @@ package org.example;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -14,6 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import kekolab.javaplex.PlexApi;
 import kekolab.javaplex.PlexMediaServer;
+import kekolab.javaplex.PlexMediatag;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.example.listeners.MessageListener;
@@ -31,7 +33,7 @@ public class Main
 {
 
 	public static final String DISCORD_MESSAGE = "React to this message to get your roles!";
-	private static final String CURRENT_VERSION = "2.1.0";
+	private static final String CURRENT_VERSION = "3.1.0";
 	private static final Logger logger = LogManager.getLogger(Main.class);
 	public static String DISCORD_TOKEN = "";
 	public static String IP = "";
@@ -47,6 +49,8 @@ public class Main
 	public static Pattern PATTERN_MATCH = Pattern.compile(VALID_EMAIL_ADDRESS_REGEX, Pattern.CASE_INSENSITIVE);
 	static DiscordApi discordApi = null;
 	private static ScheduledExecutorService mService;
+	private static PlexMediaServer plexMediaServer;
+	private static PlexApi plexApi;
 
 	static
 	{
@@ -108,14 +112,17 @@ public class Main
 
 		logger.info("The current version of the project is {}", CURRENT_VERSION);
 
-		PlexMediaServer plexMediaServer = getPlexMediaServer(getPlexApi());
-		for (int i = 0; i < 100 && plexMediaServer.getFriendlyName() == null; i++)
+		initApi();
+		initPlexMediaServer();
+
+		for (int i = 0; i < 100 && getServer().getFriendlyName() == null; i++)
 		{
 			logger.error("Friendly name was null trying again {}", i);
-			plexMediaServer = getPlexMediaServer(getPlexApi());
+			initApi();
+			initPlexMediaServer();
 			Thread.sleep(100);
 		}
-		if (plexMediaServer.getFriendlyName() == null)
+		if (getServer().getFriendlyName() == null)
 		{
 			logger.error("Failed to start Discord bot.");
 			return;
@@ -131,19 +138,18 @@ public class Main
 		builder.addServerBecomesAvailableListener(new ServerBecomesAvailable());
 		builder.addListener(new ReactListener(ROLE_ID));
 		builder.addListener(new MessageListener());
-		builder.addListener(new RoleListener(plexMediaServer));
+		builder.addListener(new RoleListener(getServer()));
 
 		discordApi = builder.login().join();
-
 		logger.info("You can invite me by using the following url: {}", discordApi.createBotInvite());
 
 		discordApi.bulkOverwriteGlobalApplicationCommands(slashCommandsSetUp.getCommands());
-		discordApi.addSlashCommandCreateListener(new PlexListener(plexMediaServer));
+		discordApi.addSlashCommandCreateListener(new PlexListener(getServer()));
 
-		launchScheduledExecutor(discordApi, plexMediaServer);
+		launchScheduledExecutor(discordApi);
 	}
 
-	public static void launchScheduledExecutor(DiscordApi api, PlexMediaServer plexMediaServer)
+	public static void launchScheduledExecutor(DiscordApi api)
 	{
 		if (mService == null || mService.isShutdown())
 		{
@@ -154,10 +160,10 @@ public class Main
 				// Perform your recurring method calls in here.
 				try
 				{
-					PlexInformationWorker plexInformationWorker = new PlexInformationWorker();
 					TextChannel textChannel = api.getTextChannelById(TEXT_CHANNELID).get();
 
-					plexInformationWorker.execute(api, plexMediaServer).whenComplete(((embedBuilder, throwable) ->
+					PlexInformationWorker plexInformationWorker = new PlexInformationWorker();
+					plexInformationWorker.execute(api, getServer(), getSessions()).whenComplete(((embedBuilder, throwable) ->
 					{
 						if (throwable == null)
 						{
@@ -183,7 +189,7 @@ public class Main
 					}));
 
 					CountPlexUsersWorker countPlexUsersWorker = new CountPlexUsersWorker();
-					countPlexUsersWorker.execute(api, plexMediaServer).whenComplete((str, err) ->
+					countPlexUsersWorker.execute(api, getSessions()).whenComplete((str, err) ->
 					{
 						if (err == null)
 						{
@@ -249,18 +255,34 @@ public class Main
 		}
 	}
 
-	private static PlexApi getPlexApi()
+	private static PlexApi getApi()
+	{
+		return plexApi;
+	}
+
+	private static void initApi()
 	{
 		PlexApi.Builder apiBuilder = PlexApi.Builder.withDefaultHttpClient();
 		apiBuilder.withPlexDeviceName("Plex Information Bot");
-		PlexApi api = apiBuilder.build();
-		api.withToken(PLEX_KEY);
-		return api;
+		plexApi = apiBuilder.build();
+		if (!PLEX_KEY.isEmpty())
+		{
+			plexApi.withToken(PLEX_KEY);
+		}
 	}
 
-	private static PlexMediaServer getPlexMediaServer(PlexApi api) throws URISyntaxException
+	public static PlexMediaServer getServer()
 	{
-		PlexMediaServer plexMediaServer = api.getMediaServer(new URI("http://" + IP + ":" + PORT));
 		return plexMediaServer;
+	}
+
+	private static void initPlexMediaServer() throws URISyntaxException
+	{
+		plexMediaServer =  getApi().getMediaServer(new URI("http://" + IP + ":" + PORT));
+	}
+
+	public static synchronized List<PlexMediatag<?>> getSessions()
+	{
+		return getServer().status().sessions();
 	}
 }

@@ -44,7 +44,7 @@ public class PlexInformationWorker
 	NumberFormat numberFormat = new DecimalFormat("#0.00");
 	NumberFormat numberFormat2 = new DecimalFormat("#00");
 
-	public CompletableFuture<EmbedBuilder> execute(DiscordApi api, PlexMediaServer plexMediaServer)
+	public CompletableFuture<EmbedBuilder> execute(DiscordApi api, PlexMediaServer plexMediaServer, List<PlexMediatag<?>> mediatags)
 	{
 		return CompletableFuture.supplyAsync(() -> {
 			EmbedBuilder embed = new EmbedBuilder();
@@ -52,8 +52,6 @@ public class PlexInformationWorker
 			Instant time = Instant.now();
 			String updatedTime = formatter.format(Date.from(time));
 			StringBuilder stringBuilder = new StringBuilder();
-
-			List<PlexMediatag<?>> mediatags = plexMediaServer.status().sessions(); // A list of all the items being streamed
 			int streamCount = mediatags.size();
 			List<PlexShow> shows = null;
 			if (streamCount == 0)

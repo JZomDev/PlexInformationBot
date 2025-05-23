@@ -37,7 +37,7 @@ public class PlexListener implements SlashCommandCreateListener
 
 					try
 					{
-						String line = activePlexUsersWorker.execute(event.getApi(), plexMediaServer).join();
+						String line = activePlexUsersWorker.execute(event.getApi()).join();
 
 						slashCommandInteraction.createFollowupMessageBuilder()
 							.setContent(line)

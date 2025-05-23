@@ -2,21 +2,18 @@ package org.example.workers;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import kekolab.javaplex.PlexMediaServer;
 import kekolab.javaplex.PlexMediatag;
 import org.javacord.api.DiscordApi;
 
 public class CountPlexUsersWorker
 {
-	public CompletableFuture<String> execute(DiscordApi api, PlexMediaServer plexMediaServer)
+	public CompletableFuture<String> execute(DiscordApi api, List<PlexMediatag<?>> mediatags)
 	{
 		return CompletableFuture.supplyAsync(() -> {
 			try
 			{
 				try
 				{
-					List<PlexMediatag<?>> mediatags = plexMediaServer.status().sessions(); // A list of all the items being streamed
-
 					int totalTotal = mediatags.size();
 
 					String line;
