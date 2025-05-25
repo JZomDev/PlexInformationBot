@@ -26,6 +26,7 @@ import kekolab.javaplex.PlexMediaServer;
 import kekolab.javaplex.PlexMediatag;
 import kekolab.javaplex.PlexMovie;
 import kekolab.javaplex.PlexPlayer;
+import kekolab.javaplex.PlexSeason;
 import kekolab.javaplex.PlexSession;
 import kekolab.javaplex.PlexShow;
 import kekolab.javaplex.PlexUser;
@@ -66,6 +67,12 @@ public class PlexInformationWorker
 				{
 					PlexMediatag<?> plexMediatag = mediatags.get(i);
 					PlexSession plexSession = plexMediatag.getSession();
+
+					if (plexSession == null)
+					{
+						activtyTitle = "No current activity";
+						continue;
+					}
 					PlexPlayer plexPlayer = plexMediatag.getPlayer();
 					PlexUser plexUser = plexMediatag.getUser();
 
@@ -115,38 +122,18 @@ public class PlexInformationWorker
 						}
 					}
 
-					AtomicReference<Long> bitrate = new AtomicReference<>(0L); // tv show name
-					AtomicReference<String> grandparent_title = new AtomicReference<>(""); // tv show name
 					String title = plexMediatag.getTitle();// tv episode name
-					AtomicReference<String> seasonNumber = new AtomicReference<>(""); // tv season number
-					AtomicReference<String> episodeNumber = new AtomicReference<>(""); // tv episode number
-					AtomicBoolean isDone = new AtomicBoolean(false);
-
+					String grandparent_title = "";
+					String episodeNumber = "";
+					String seasonNumber = "";
 					if (plexMediatag instanceof PlexEpisode plexEpisode)
 					{
-						shows = shows == null ? plexMediaServer.library()
-							.sections()
-							.showSections()
-							.get(0)
-							.all().execute() : shows; // Get all the shows
-
-						shows.stream()
-							.takeWhile(show -> !isDone.get())
-							.forEach(plexShow -> plexShow.children().stream()
-								.takeWhile(season -> !isDone.get())
-								.forEach(plexSeason -> plexSeason.children().stream()
-									.takeWhile(ep -> !isDone.get())
-									.forEach(plexEpisode1 -> {
-										if (plexEpisode1.getGuid().equals(plexEpisode.getGuid()))
-										{
-											seasonNumber.set(String.valueOf(plexSeason.getIndex()));
-											grandparent_title.set(String.valueOf(plexShow.getTitle()));
-											episodeNumber.set(String.valueOf(plexEpisode1.getIndex()));
-											bitrate.set(Long.valueOf(plexEpisode1.getMedia().get(0).getBitrate()));
-											isDone.set(true);
-										}
-									})));
-
+						PlexSeason plexSeason = plexEpisode.parent();
+						PlexShow plexShow = plexSeason.parent();
+						episodeNumber = String.valueOf(plexEpisode.getIndex());
+						seasonNumber = String.valueOf(plexSeason.getIndex());
+						long bitrate = plexEpisode.getMedia().get(0).getBitrate();
+						grandparent_title = plexShow.getTitle();
 
 						view_offset = plexMediatag.getViewOffset();
 						stream_duration = plexEpisode.getDuration();
@@ -163,7 +150,7 @@ public class PlexInformationWorker
 							{
 								video_full_resolution += "p";
 							}
-							quality_profile = getQualityProfile(bandwidth, bitrate.get());
+							quality_profile = getQualityProfile(bandwidth, bitrate);
 						}
 					}
 
@@ -175,8 +162,8 @@ public class PlexInformationWorker
 					{
 						stringBuilder.append(i + 1).append(" - ").append(mediaChoice)
 							.append(" | ").append(stateStr)
-							.append(" ").append(grandparent_title.get())
-							.append(" (S").append(seasonNumber.get()).append(" E").append(episodeNumber.get()).append(") -").append(title).append("\n");
+							.append(" ").append(grandparent_title)
+							.append(" (S").append(seasonNumber).append(" E").append(episodeNumber).append(") -").append(title).append("\n");
 					}
 					else
 					{
