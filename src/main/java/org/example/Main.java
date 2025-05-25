@@ -16,6 +16,7 @@ import java.util.regex.Pattern;
 import kekolab.javaplex.PlexApi;
 import kekolab.javaplex.PlexMediaServer;
 import kekolab.javaplex.PlexMediatag;
+import kekolab.javaplex.PlexStatus;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.example.listeners.MessageListener;
@@ -115,18 +116,6 @@ public class Main
 		initApi();
 		initPlexMediaServer();
 
-		for (int i = 0; i < 100 && getServer().getFriendlyName() == null; i++)
-		{
-			logger.error("Friendly name was null trying again {}", i);
-			initApi();
-			initPlexMediaServer();
-			Thread.sleep(100);
-		}
-		if (getServer().getFriendlyName() == null)
-		{
-			logger.error("Failed to start Discord bot.");
-			return;
-		}
 		SlashCommandsSetUp slashCommandsSetUp = new SlashCommandsSetUp();
 
 		DiscordApiBuilder builder = new DiscordApiBuilder();
@@ -281,8 +270,20 @@ public class Main
 		plexMediaServer =  getApi().getMediaServer(new URI("http://" + IP + ":" + PORT));
 	}
 
+	public static synchronized PlexStatus getStatus()
+	{
+		return getServer().status();
+	}
+
 	public static synchronized List<PlexMediatag<?>> getSessions()
 	{
-		return getServer().status().sessions();
+		try
+		{
+			return getStatus().sessions();
+		}
+		catch (Exception e)
+		{
+			return null;
+		}
 	}
 }

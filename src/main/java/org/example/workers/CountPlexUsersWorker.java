@@ -12,29 +12,22 @@ public class CountPlexUsersWorker
 		return CompletableFuture.supplyAsync(() -> {
 			try
 			{
-				try
-				{
-					int totalTotal = mediatags.size();
+				int totalTotal = mediatags.size();
 
-					String line;
-					if (totalTotal == 0)
-					{
-						line = "to 0 people";
-					}
-					else if (totalTotal == 1)
-					{
-						line = "to 1 person";
-					}
-					else
-					{
-						line = "to " + totalTotal + " people";
-					}
-					return line;
-				}
-				catch (Throwable t)
+				String line;
+				if (totalTotal == 0)
 				{
-					return "Unknown";
+					line = "to 0 people";
 				}
+				else if (totalTotal == 1)
+				{
+					line = "to 1 person";
+				}
+				else
+				{
+					line = "to " + totalTotal + " people";
+				}
+				return line;
 			}
 			catch (Exception e)
 			{

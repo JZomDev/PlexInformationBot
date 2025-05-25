@@ -18,8 +18,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import kekolab.javaplex.PlexEpisode;
 import kekolab.javaplex.PlexMedia;
 import kekolab.javaplex.PlexMediaServer;
@@ -27,9 +25,7 @@ import kekolab.javaplex.PlexMediatag;
 import kekolab.javaplex.PlexMovie;
 import kekolab.javaplex.PlexPlayer;
 import kekolab.javaplex.PlexSeason;
-import kekolab.javaplex.PlexSession;
 import kekolab.javaplex.PlexShow;
-import kekolab.javaplex.PlexUser;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.javacord.api.DiscordApi;
@@ -53,150 +49,28 @@ public class PlexInformationWorker
 			Instant time = Instant.now();
 			String updatedTime = formatter.format(Date.from(time));
 			StringBuilder stringBuilder = new StringBuilder();
-			int streamCount = mediatags.size();
-			List<PlexShow> shows = null;
-			if (streamCount == 0)
+			if (mediatags == null || mediatags.isEmpty())
 			{
 				activtyTitle = "No current activity";
 			}
 			else
 			{
 				activtyTitle = "Current activity on " + plexMediaServer.getFriendlyName();
-				long total_bandwidth = 0;
+				Long total_bandwidth = 0L;
 				for (int i = 0; i < mediatags.size(); i++)
 				{
 					PlexMediatag<?> plexMediatag = mediatags.get(i);
-					PlexSession plexSession = plexMediatag.getSession();
-
-					if (plexSession == null)
-					{
-						activtyTitle = "No current activity";
-						continue;
+					if (plexMediatag instanceof PlexEpisode plexEpisode) {
+						total_bandwidth += buildEpisodeString(stringBuilder, plexEpisode, i);
+					} else if (plexMediatag instanceof PlexMovie plexMovie) {
+						total_bandwidth += buildMovieString(stringBuilder, plexMovie, i);
 					}
-					PlexPlayer plexPlayer = plexMediatag.getPlayer();
-					PlexUser plexUser = plexMediatag.getUser();
-
-					long bandwidth = plexSession.getBandwidth();
-					total_bandwidth += bandwidth;
-					String full_title = "";
-					String state = "";
-					String media_type = "";
-					String video_full_resolution = "";
-					String quality_profile = null;
-					String username = plexUser.getTitle();
-					String userID = plexUser.getId();
-					String friendly_name = "";
-					if (!TAUTULLI_URL.isEmpty())
-					{
-						try
-						{
-							friendly_name = getUsers().getOrDefault(userID, "");
-						}
-						catch (Exception e)
-						{
-							log.error(e);
-						}
-					}
-					long view_offset = 0;
-					long stream_duration = 0;
-
-					if (plexMediatag instanceof PlexMovie plexMovie)
-					{
-						view_offset = plexMovie.getViewOffset();
-						stream_duration = plexMovie.getDuration();
-						for (int j = 0; j < plexMovie.getMedia().size(); j++)
-						{
-							state = plexPlayer.getState();
-
-							full_title = plexMovie.getTitle();
-							media_type = plexMovie.getType();
-							PlexMedia plexMedia = plexMovie.getMedia().get(j);
-							video_full_resolution = plexMedia.getVideoResolution();
-							if (!video_full_resolution.endsWith("p") && !video_full_resolution.equals("SD"))
-							{
-								video_full_resolution += "p";
-							}
-							long bitrate = plexMedia.getBitrate();
-							quality_profile = getQualityProfile(bandwidth, bitrate);
-
-						}
-					}
-
-					String title = plexMediatag.getTitle();// tv episode name
-					String grandparent_title = "";
-					String episodeNumber = "";
-					String seasonNumber = "";
-					if (plexMediatag instanceof PlexEpisode plexEpisode)
-					{
-						PlexSeason plexSeason = plexEpisode.parent();
-						PlexShow plexShow = plexSeason.parent();
-						episodeNumber = String.valueOf(plexEpisode.getIndex());
-						seasonNumber = String.valueOf(plexSeason.getIndex());
-						long bitrate = plexEpisode.getMedia().get(0).getBitrate();
-						grandparent_title = plexShow.getTitle();
-
-						view_offset = plexMediatag.getViewOffset();
-						stream_duration = plexEpisode.getDuration();
-						for (int j = 0; j < plexEpisode.getMedia().size(); j++)
-						{
-							state = plexPlayer.getState();
-
-							full_title = plexMediatag.getTitle();
-							media_type = plexMediatag.getType();
-
-							PlexMedia plexMedia = plexEpisode.getMedia().get(j);
-							video_full_resolution = plexMedia.getVideoResolution();
-							if (!video_full_resolution.endsWith("p") && !video_full_resolution.equals("SD"))
-							{
-								video_full_resolution += "p";
-							}
-							quality_profile = getQualityProfile(bandwidth, bitrate);
-						}
-					}
-
-					String bandwidthFormat = numberFormat.format((double) bandwidth / 1000);
-					String stateStr = state.equals("paused") ? ":pause_button:" : ":arrow_forward:";
-
-					String mediaChoice = media_type.equals("episode") ? ":tv:" : ":cinema:";
-					if (mediaChoice.equals(":tv:"))
-					{
-						stringBuilder.append(i + 1).append(" - ").append(mediaChoice)
-							.append(" | ").append(stateStr)
-							.append(" ").append(grandparent_title)
-							.append(" (S").append(seasonNumber).append(" E").append(episodeNumber).append(") -").append(title).append("\n");
-					}
-					else
-					{
-						stringBuilder.append(i + 1).append(" - ").append(mediaChoice).append(" | ").append(stateStr).append(" ").append(full_title).append("\n");
-					}
-					stringBuilder.append(":eyes: ").append(username + (!friendly_name.isEmpty() ? (" (" + friendly_name + ")") : "")).append("\n");
-					stringBuilder.append(":gear: ").append(quality_profile).append("(").append(video_full_resolution).append(") | @").append(bandwidthFormat).append("Mbps").append("\n");
-
-					ArrayList<Long> elapsedTime = getIntervalTime(view_offset);
-					long elapsedHours = elapsedTime.get(0);
-					long elapsedMinutes = elapsedTime.get(1);
-					long elapsedSeconds = elapsedTime.get(2);
-
-					ArrayList<Long> duraTime = getIntervalTime(stream_duration);
-
-					long duraHours = duraTime.get(0);
-					long duraMinutes = duraTime.get(1);
-					long duraSeconds = duraTime.get(2);
-
-					String elapsedTimeStr = elapsedHours > 0 ? elapsedHours + ":" + numberFormat2.format(elapsedMinutes) + ":" + numberFormat2.format(elapsedSeconds) : elapsedMinutes + ":" + numberFormat2.format(elapsedSeconds);
-					String duraTimeStr = duraHours > 0 ? duraHours + ":" + numberFormat2.format(duraMinutes) + ":" + numberFormat2.format(duraSeconds) : duraMinutes + ":" + numberFormat2.format(duraSeconds);
-
-					stringBuilder.append(":alarm_clock: ").append(elapsedTimeStr).append(" / ").append(duraTimeStr);
-
-					stringBuilder.append("\n");
 				}
 
 				stringBuilder.append("\n");
 				String bandwidthFormat = numberFormat.format((double) total_bandwidth / 1000);
 
-				stringBuilder.append(streamCount + (streamCount == 1 ? " stream @ " : " streams @ ") + bandwidthFormat + "Mbps");
-
-
+				stringBuilder.append(mediatags.size() + (mediatags.size() == 1 ? " stream @ " : " streams @ ") + bandwidthFormat + "Mbps");
 				embed.setDescription(stringBuilder.toString());
 			}
 
@@ -207,6 +81,120 @@ public class PlexInformationWorker
 			return embed;
 
 		}, api.getThreadPool().getExecutorService());
+	}
+
+	private long buildEpisodeString(StringBuilder stringBuilder, PlexEpisode episode, int index) {
+		PlexPlayer player = episode.getPlayer();
+		PlexSeason season = episode.parent();
+		String userID = episode.getUser().getId();
+		String username = episode.getUser().getTitle();
+		String friendlyName = "";
+		if (!TAUTULLI_URL.isEmpty()) {
+			try {
+				friendlyName = getUsers().getOrDefault(userID, "");
+			} catch (Exception e) {
+				log.error(e);
+			}
+		}
+
+		long bandwidth = episode.getSession().getBandwidth();
+		PlexShow show = season.parent();
+		String episodeTitle = episode.getTitle();
+		String seasonNumber = String.valueOf(season.getIndex());
+		String episodeNumber = String.valueOf(episode.getIndex());
+		String grandparentTitle = show.getTitle();
+		String state = player.getState();
+		String stateStr = state.equals("paused") ? ":pause_button:" : ":arrow_forward:";
+		String videoResolution = episode.getMedia().get(0).getVideoResolution();
+		if (!videoResolution.endsWith("p") && !videoResolution.equals("SD") && !videoResolution.equals("4k")) {
+			videoResolution += "p";
+		}
+
+		long bitrate = 0;
+		for (PlexMedia pm : episode.getMedia())
+			bitrate += pm.getBitrate();{
+		}
+
+		String qualityProfile = getQualityProfile(bandwidth, bitrate);
+		String bandwidthFormat = numberFormat.format((double) bandwidth / 1000);
+
+		long viewOffset = episode.getViewOffset();
+		long duration = episode.getDuration();
+
+		stringBuilder.append(index + 1).append(" - :tv: | ").append(stateStr)
+			.append(" ").append(grandparentTitle)
+			.append(" (S").append(seasonNumber).append(" E").append(episodeNumber).append(") -").append(episodeTitle).append("\n");
+
+		stringBuilder.append(":eyes: ").append(username).append(!friendlyName.isEmpty() ? (" (" + friendlyName + ")") : "").append("\n");
+		stringBuilder.append(":gear: ").append(qualityProfile).append("(").append(videoResolution).append(") | @").append(bandwidthFormat).append("Mbps").append("\n");
+
+		appendTiming(stringBuilder, viewOffset, duration);
+		stringBuilder.append("\n");
+		return bandwidth;
+	}
+
+	private long buildMovieString(StringBuilder stringBuilder, PlexMovie movie, int index) {
+		PlexPlayer player = movie.getPlayer();
+		String userID = movie.getUser().getId();
+		String username = movie.getUser().getTitle();
+		String friendlyName = "";
+		if (!TAUTULLI_URL.isEmpty()) {
+			try {
+				friendlyName = getUsers().getOrDefault(userID, "");
+			} catch (Exception e) {
+				log.error(e);
+			}
+		}
+
+		long bandwidth = movie.getSession().getBandwidth();
+
+		String fullTitle = movie.getTitle();
+		String state = player.getState();
+		String stateStr = state.equals("paused") ? ":pause_button:" : ":arrow_forward:";
+		String videoResolution = movie.getMedia().get(0).getVideoResolution();
+		if (!videoResolution.endsWith("p") && !videoResolution.equals("SD") && !videoResolution.equals("4k")) {
+			videoResolution += "p";
+		}
+		long bitrate = 0;
+		for (PlexMedia pm : movie.getMedia())
+		{
+			bitrate += pm.getBitrate();
+		}
+		String qualityProfile = getQualityProfile(bandwidth, bitrate);
+		String bandwidthFormat = numberFormat.format((double) bandwidth / 1000);
+
+		long viewOffset = movie.getViewOffset();
+		long duration = movie.getDuration();
+
+		stringBuilder.append(index + 1).append(" - :cinema: | ").append(stateStr).append(" ").append(fullTitle).append("\n");
+		stringBuilder.append(":eyes: ").append(username).append(!friendlyName.isEmpty() ? (" (" + friendlyName + ")") : "").append("\n");
+		stringBuilder.append(":gear: ").append(qualityProfile).append("(").append(videoResolution).append(") | @").append(bandwidthFormat).append("Mbps").append("\n");
+
+		appendTiming(stringBuilder, viewOffset, duration);
+		stringBuilder.append("\n");
+		return bandwidth;
+	}
+
+	private void appendTiming(StringBuilder builder, long viewOffset, long duration) {
+		ArrayList<Long> elapsedTime = getIntervalTime(viewOffset);
+		ArrayList<Long> totalTime = getIntervalTime(duration);
+
+		long elapsedHours = elapsedTime.get(0);
+		long elapsedMinutes = elapsedTime.get(1);
+		long elapsedSeconds = elapsedTime.get(2);
+		long totalHours = totalTime.get(0);
+		long totalMinutes = totalTime.get(1);
+		long totalSeconds = totalTime.get(2);
+
+		String elapsedStr = elapsedHours > 0 ?
+			elapsedHours + ":" + numberFormat2.format(elapsedMinutes) + ":" + numberFormat2.format(elapsedSeconds) :
+			elapsedMinutes + ":" + numberFormat2.format(elapsedSeconds);
+
+		String totalStr = totalHours > 0 ?
+			totalHours + ":" + numberFormat2.format(totalMinutes) + ":" + numberFormat2.format(totalSeconds) :
+			totalMinutes + ":" + numberFormat2.format(totalSeconds);
+
+		builder.append(":alarm_clock: ").append(elapsedStr).append(" / ").append(totalStr);
 	}
 
 	private HashMap<String, String> getUsers() throws Exception
