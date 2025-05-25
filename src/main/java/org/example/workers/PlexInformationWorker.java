@@ -114,7 +114,7 @@ public class PlexInformationWorker
 		String state = player.getState();
 		String stateStr = state.equals("paused") ? ":pause_button:" : ":arrow_forward:";
 		String videoResolution = episode.getMedia().get(0).getVideoResolution();
-		if (!videoResolution.endsWith("p") && !videoResolution.equals("SD") && !videoResolution.equals("4k")) {
+		if (!videoResolution.endsWith("p") && !videoResolution.equals("SD") && !videoResolution.equals("4K")) {
 			videoResolution += "p";
 		}
 
@@ -167,7 +167,7 @@ public class PlexInformationWorker
 		String state = player.getState();
 		String stateStr = state.equals("paused") ? ":pause_button:" : ":arrow_forward:";
 		String videoResolution = movie.getMedia().get(0).getVideoResolution();
-		if (!videoResolution.endsWith("p") && !videoResolution.equals("SD") && !videoResolution.equals("4k")) {
+		if (!videoResolution.endsWith("p") && !videoResolution.equalsIgnoreCase("SD") && !videoResolution.equalsIgnoreCase("4K")) {
 			videoResolution += "p";
 		}
 		long bitrate = 0;
