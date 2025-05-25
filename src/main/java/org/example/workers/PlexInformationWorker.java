@@ -97,7 +97,15 @@ public class PlexInformationWorker
 			}
 		}
 
-		long bandwidth = episode.getSession().getBandwidth();
+		long bandwidth = 0;
+		if (episode.getSession() == null)
+		{
+			return 0;
+		}
+		else
+		{
+			bandwidth = episode.getSession().getBandwidth();
+		}
 		PlexShow show = season.parent();
 		String episodeTitle = episode.getTitle();
 		String seasonNumber = String.valueOf(season.getIndex());
@@ -145,8 +153,15 @@ public class PlexInformationWorker
 				log.error(e);
 			}
 		}
-
-		long bandwidth = movie.getSession().getBandwidth();
+		long bandwidth = 0;
+		if (movie.getSession() == null)
+		{
+			return 0;
+		}
+		else
+		{
+			bandwidth = movie.getSession().getBandwidth();
+		}
 
 		String fullTitle = movie.getTitle();
 		String state = player.getState();
