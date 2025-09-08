@@ -144,7 +144,42 @@ public class Main
 		{
 			mService = Executors.newScheduledThreadPool(2);
 		}
-		AtomicInteger i = new AtomicInteger();
+		mService.scheduleAtFixedRate(() -> {
+				// Perform your recurring method calls in here.
+				try
+				{
+					CountPlexUsersWorker countPlexUsersWorker = new CountPlexUsersWorker();
+					countPlexUsersWorker.execute(api, getSessions()).whenComplete((str, err) ->
+					{
+						if (err == null)
+						{
+							api.updateActivity(str);
+							LocalDateTime myObj = LocalDateTime.now();
+							logger.info("Activity was modified at {}", myObj.toString());
+						}
+						else
+						{
+							logger.error(err.getMessage(), err);
+						}
+					});
+				}
+				catch (Exception e)
+				{
+					try
+					{
+						finishExecutor().join();
+					}
+					catch (Exception e2)
+					{
+						throw new RuntimeException(e2);
+					}
+					logger.error(e.getMessage(), e);
+				}
+			},
+			0, // How long to delay the start
+			15, // How long between executions
+			TimeUnit.SECONDS); // The time unit used
+
 		mService.scheduleAtFixedRate(() -> {
 				// Perform your recurring method calls in here.
 				try
@@ -162,8 +197,7 @@ public class Main
 								{
 									msg.edit(embedBuilder);
 									LocalDateTime myObj = LocalDateTime.now();
-									i.getAndIncrement();
-									logger.info("Message was modified at {} for the {} time", myObj.toString(), i.get());
+									logger.info("Message was modified at {}", myObj.toString());
 								}
 								else
 								{
@@ -176,19 +210,6 @@ public class Main
 							logger.error(throwable.getMessage(), throwable);
 						}
 					}));
-
-					CountPlexUsersWorker countPlexUsersWorker = new CountPlexUsersWorker();
-					countPlexUsersWorker.execute(api, getSessions()).whenComplete((str, err) ->
-					{
-						if (err == null)
-						{
-							api.updateActivity(str);
-						}
-						else
-						{
-							logger.error(err.getMessage(), err);
-						}
-					});
 				}
 				catch (Exception e)
 				{

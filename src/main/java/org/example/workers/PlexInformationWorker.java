@@ -74,7 +74,6 @@ public class PlexInformationWorker
 				embed.setDescription(stringBuilder.toString());
 			}
 
-
 			embed.setTitle(activtyTitle);
 			embed.setFooter("Updated " + updatedTime);
 			embed.setAuthor(api.getYourself());
