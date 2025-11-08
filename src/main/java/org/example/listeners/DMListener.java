@@ -8,7 +8,6 @@ import java.util.Timer;
 import java.util.TimerTask;
 import kekolab.javaplex.PlexMediaServer;
 import kekolab.javaplex.PlexServer;
-import kekolab.javaplex.PlexServerShare;
 import org.example.Main;
 import org.javacord.api.DiscordApi;
 import org.javacord.api.event.message.MessageCreateEvent;
@@ -21,7 +20,7 @@ public class DMListener implements MessageCreateListener
 	PlexMediaServer plexMediaServer;
 	Timer timer;
 
-	public DMListener(DiscordApi api, long userID, PlexMediaServer plexMediaServer) throws Exception
+	public DMListener(DiscordApi api, long userID, PlexMediaServer plexMediaServer)
 	{
 		this.api = api;
 		this.userID = userID;
@@ -38,7 +37,7 @@ public class DMListener implements MessageCreateListener
 			return;
 		}
 
-		if (event.getMessage().getUserAuthor().get().getId() == api.getYourself().getId())
+		if(event.getMessageAuthor().getId() == api.getYourself().getId())
 		{
 			return;
 		}
@@ -47,38 +46,41 @@ public class DMListener implements MessageCreateListener
 		if (validEmail(msg))
 		{
 			event.getChannel().sendMessage("Got it we will be adding your email to plex shortly!");
-			try
-			{
-				boolean success = plexInvite(msg);
 
-				if (success)
-				{
-					event.getChannel().sendMessage("You have Been Added To Plex! Login to plex and accept the invite!");
-					event.getApi().removeListener(this);
-				}
-				else
-				{
-					event.getChannel().sendMessage("There was an error adding this email address. Message Server Admin.");
-				}
-			}
-			catch (Exception e)
+			boolean success = plexInvite(msg);
+
+			if (success)
 			{
-				event.getChannel().sendMessage("There was an error, please contact the server administrator");
-			}
-		}
+				event.getChannel().sendMessage("You have Been Added To Plex! Login to plex and accept the invite!");
+            }
+			else
+			{
+				event.getChannel().sendMessage("There was an error adding this email address. Message Server Admin.");
+            }
+			// remove listener and cancel timer when plex invite attempted
+            event.getApi().removeListener(this);
+            timer.cancel();
+        }
 		else
 		{
 			event.getChannel().sendMessage("Invalid email. Please just type in your email and nothing else.");
 		}
 	}
 
-	private boolean plexInvite(String invitedEmail) throws Exception
+	private boolean plexInvite(String invitedEmail)
 	{
 		List<PlexServer.Section> sections = plexMediaServer.toPlexServer().getSections();
 		// only keep show and movies
 		sections.removeIf(section -> !section.getType().equals("show") && !section.getType().equals("movie"));
-		PlexServerShare invitedUser = plexMediaServer.toPlexServer().serverShares().inviteFriend(invitedEmail, sections);
 
+		try
+		{
+			plexMediaServer.toPlexServer().serverShares().inviteFriend(invitedEmail, sections);
+		}
+		catch (Exception e)
+		{
+			return false;
+		}
 		return true;
 	}
 
@@ -100,7 +102,10 @@ public class DMListener implements MessageCreateListener
 		public void run()
 		{
 			api.removeListener(dmListener);
-			api.getUserById(userID).join().sendMessage("Timed Out. Message Server Admin with your email so They Can Add You Manually.");
+			if (dmListener != null)
+			{
+				api.getUserById(userID).join().sendMessage("Timed Out. Message Server Admin with your email so They Can Add You Manually.");
+			}
 		}
 	}
 }

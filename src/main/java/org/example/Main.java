@@ -11,7 +11,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import kekolab.javaplex.PlexApi;
 import kekolab.javaplex.PlexMediaServer;
@@ -34,7 +33,7 @@ public class Main
 {
 
 	public static final String DISCORD_MESSAGE = "React to this message to get your roles!";
-	private static final String CURRENT_VERSION = "3.1.0";
+	private static final String CURRENT_VERSION = "3.1.1";
 	private static final Logger logger = LogManager.getLogger(Main.class);
 	public static String DISCORD_TOKEN = "";
 	public static String IP = "";
@@ -184,6 +183,10 @@ public class Main
 				// Perform your recurring method calls in here.
 				try
 				{
+					if (api.getTextChannelById(TEXT_CHANNELID).isEmpty())
+					{
+						return;
+					}
 					TextChannel textChannel = api.getTextChannelById(TEXT_CHANNELID).get();
 
 					PlexInformationWorker plexInformationWorker = new PlexInformationWorker();
@@ -229,7 +232,7 @@ public class Main
 			TimeUnit.SECONDS); // The time unit used
 	}
 
-	public static CompletableFuture<Boolean> finishExecutor() throws InterruptedException
+	public static CompletableFuture<Boolean> finishExecutor()
 	{
 		return CompletableFuture.supplyAsync(() -> {
 			try
