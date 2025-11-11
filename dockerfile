@@ -8,7 +8,7 @@ WORKDIR /home/gradle/src
 RUN gradle fatJar --no-daemon --info
 
 # package stage
-FROM openjdk:17
+FROM eclipse-temurin:17-jdk
 
 RUN mkdir -p /srv
 WORKDIR /srv
