@@ -101,9 +101,9 @@ public class DMListener implements MessageCreateListener
 		@Override
 		public void run()
 		{
-			api.removeListener(dmListener);
 			if (dmListener != null)
 			{
+				api.removeListener(dmListener);
 				api.getUserById(userID).join().sendMessage("Timed Out. Message Server Admin with your email so They Can Add You Manually.");
 			}
 		}

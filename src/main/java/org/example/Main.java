@@ -143,11 +143,13 @@ public class Main
 		{
 			mService = Executors.newScheduledThreadPool(2);
 		}
+		CountPlexUsersWorker countPlexUsersWorker = new CountPlexUsersWorker();
+		PlexInformationWorker plexInformationWorker = new PlexInformationWorker();
+
 		mService.scheduleAtFixedRate(() -> {
 				// Perform your recurring method calls in here.
 				try
 				{
-					CountPlexUsersWorker countPlexUsersWorker = new CountPlexUsersWorker();
 					countPlexUsersWorker.execute(api, getSessions()).whenComplete((str, err) ->
 					{
 						if (err == null)
@@ -189,7 +191,6 @@ public class Main
 					}
 					TextChannel textChannel = api.getTextChannelById(TEXT_CHANNELID).get();
 
-					PlexInformationWorker plexInformationWorker = new PlexInformationWorker();
 					plexInformationWorker.execute(api, getServer(), getSessions()).whenComplete(((embedBuilder, throwable) ->
 					{
 						if (throwable == null)
