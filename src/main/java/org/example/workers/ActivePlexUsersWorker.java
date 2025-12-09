@@ -3,21 +3,20 @@ package org.example.workers;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import kekolab.javaplex.PlexEpisode;
-import kekolab.javaplex.PlexMediaServer;
 import kekolab.javaplex.PlexMediatag;
 import kekolab.javaplex.PlexMovie;
 import kekolab.javaplex.PlexPart;
-import org.example.Main;
+import org.example.Application;
 import org.javacord.api.DiscordApi;
 
 public class ActivePlexUsersWorker
 {
-	public CompletableFuture<String> execute(DiscordApi api)
+	public CompletableFuture<String> execute(DiscordApi api, Application application)
 	{
 		return CompletableFuture.supplyAsync(() -> {
 			try
 			{
-				List<PlexMediatag<?>> mediatags = Main.getSessions(); // A list of all the items being streamed
+				List<PlexMediatag<?>> mediatags = application.getSessions(); // A list of all the items being streamed
 
 				int totalTotal = mediatags.size();
 				int directPlayTotal = 0;
@@ -30,9 +29,8 @@ public class ActivePlexUsersWorker
 						{
 							List<PlexPart> plexParts = plexMovie.getMedia().get(0).getParts();
 
-							for (int jj = 0; jj < plexParts.size(); jj++)
+							for (PlexPart p : plexParts)
 							{
-								PlexPart p = plexParts.get(jj);
 								if (p.getDecision().equals("directplay"))
 								{
 									directPlayTotal++;

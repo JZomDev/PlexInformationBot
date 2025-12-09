@@ -6,9 +6,9 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.regex.Pattern;
 import kekolab.javaplex.PlexMediaServer;
 import kekolab.javaplex.PlexServer;
-import org.example.Main;
 import org.javacord.api.DiscordApi;
 import org.javacord.api.event.message.MessageCreateEvent;
 import org.javacord.api.listener.message.MessageCreateListener;
@@ -19,6 +19,10 @@ public class DMListener implements MessageCreateListener
 	long userID;
 	PlexMediaServer plexMediaServer;
 	Timer timer;
+
+	public String VALID_EMAIL_ADDRESS_REGEX = "^(?=.{1,64}@)[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*@"
+		+ "[^-][A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*(\\.[A-Za-z]{2,})$";
+	public Pattern PATTERN_MATCH = Pattern.compile(VALID_EMAIL_ADDRESS_REGEX, Pattern.CASE_INSENSITIVE);
 
 	public DMListener(DiscordApi api, long userID, PlexMediaServer plexMediaServer)
 	{
@@ -86,7 +90,7 @@ public class DMListener implements MessageCreateListener
 
 	private boolean validEmail(String emailAddress)
 	{
-		return Main.PATTERN_MATCH.matcher(emailAddress).matches();
+		return PATTERN_MATCH.matcher(emailAddress).matches();
 	}
 
 	class StopListener extends TimerTask
