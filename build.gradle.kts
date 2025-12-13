@@ -5,7 +5,7 @@ plugins {
 
 }
 
-group = "org.example"
+group = "org.plexinfobot"
 version = ""
 
 description = "A plex information bot."
@@ -16,29 +16,28 @@ java {
 
 repositories {
     mavenCentral()
-    maven { url = uri("https://jitpack.io") }
 }
 
 dependencies {
     implementation("org.javacord:javacord:3.8.0")
     implementation("org.apache.logging.log4j:log4j-api:2.17.2")
+    implementation("org.apache.logging.log4j:log4j-core:2.19.0")
     implementation("com.google.code.gson:gson:2.10.1")
-    implementation("org.apache.httpcomponents:httpclient:4.5.14")
 
-    runtimeOnly("org.apache.logging.log4j:log4j-core:2.19.0")
-
-    implementation("com.github.kekolab:javaplex:6.1.0")
+    implementation ("org.apache.httpcomponents.client5:httpclient5:5.3")
+    implementation ("com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.14.0-rc2")
+    implementation ("com.fasterxml.jackson.core:jackson-databind:2.13.4.2")
 }
 
 application {
-    mainClass.set("org.example.Main")
+    mainClass.set("org.plexinfobot.Main")
 }
 val fatJar = task("fatJar", type = Jar::class) {
     baseName = "${project.name}"
     manifest {
         attributes["Implementation-Title"] = "Gradle Jar File Example"
         attributes["Implementation-Version"] = version
-        attributes["Main-Class"] = "org.example.Main"
+        attributes["Main-Class"] = "org.plexinfobot.Main"
     }
     from(configurations.runtimeClasspath.get().map({ if (it.isDirectory) it else zipTree(it) }))
     with(tasks.jar.get() as CopySpec)
