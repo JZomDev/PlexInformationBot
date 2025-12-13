@@ -33,6 +33,8 @@ import org.example.workers.PlexInformationWorker;
 import org.javacord.api.DiscordApi;
 import org.javacord.api.DiscordApiBuilder;
 import org.javacord.api.entity.channel.TextChannel;
+import org.javacord.api.entity.message.Message;
+import org.javacord.api.entity.message.embed.EmbedBuilder;
 
 public class Application
 {
@@ -137,29 +139,16 @@ public class Application
 					}
 					TextChannel textChannel = api.getTextChannelById(TEXT_CHANNELID).get();
 
-					plexInformationWorker.execute(api, getServer(), getSessions()).whenComplete(((embedBuilder, throwable) ->
+					EmbedBuilder embedBuilder = plexInformationWorker.execute(api, getServer(), getSessions()).join();
+					if (embedBuilder != null)
 					{
-						if (throwable == null)
+						Message msg = api.getMessageById(MESSAGEID, textChannel).join();
+						if (msg != null)
 						{
-							api.getMessageById(MESSAGEID, textChannel).whenComplete((msg, err) ->
-							{
-								if (err == null)
-								{
-									msg.edit(embedBuilder);
-									LocalDateTime myObj = LocalDateTime.now();
-									logger.info("Message was modified at {}", myObj.toString());
-								}
-								else
-								{
-									logger.error(err.getMessage(), err);
-								}
-							});
+							msg.edit(embedBuilder).join();
+							logger.info("Message was modified at {}", LocalDateTime.now());
 						}
-						else
-						{
-							logger.error(throwable.getMessage(), throwable);
-						}
-					}));
+					}
 				}
 				catch (Exception e)
 				{
@@ -175,8 +164,8 @@ public class Application
 				}
 			},
 			0, // How long to delay the start
-			15, // How long between executions
-			TimeUnit.SECONDS); // The time unit used
+			500, // How long between executions
+			TimeUnit.MILLISECONDS); // The time unit used
 	}
 
 	public CompletableFuture<Boolean> finishExecutor()

@@ -14,18 +14,18 @@ public class CountPlexUsersWorker
 			{
 				int totalTotal = mediatags.size();
 
-				String line;
+				String line = "Streaming ";
 				if (totalTotal == 0)
 				{
-					line = "to 0 people";
+					line += "to 0 people";
 				}
 				else if (totalTotal == 1)
 				{
-					line = "to 1 person";
+					line += "to 1 person";
 				}
 				else
 				{
-					line = "to " + totalTotal + " people";
+					line += "to " + totalTotal + " people";
 				}
 				return line;
 			}
