@@ -139,16 +139,29 @@ public class Application
 					}
 					TextChannel textChannel = api.getTextChannelById(TEXT_CHANNELID).get();
 
-					EmbedBuilder embedBuilder = plexInformationWorker.execute(api, getServer(), getSessions()).join();
-					if (embedBuilder != null)
+					plexInformationWorker.execute(api, getServer(), getSessions()).whenComplete(((embedBuilder, throwable) ->
 					{
-						Message msg = api.getMessageById(MESSAGEID, textChannel).join();
-						if (msg != null)
+						if (throwable == null)
 						{
-							msg.edit(embedBuilder).join();
-							logger.info("Message was modified at {}", LocalDateTime.now());
+							api.getMessageById(MESSAGEID, textChannel).whenComplete((msg, err) ->
+							{
+								if (err == null)
+								{
+									msg.edit(embedBuilder);
+									LocalDateTime myObj = LocalDateTime.now();
+									logger.info("Message was modified at {}", myObj.toString());
+								}
+								else
+								{
+									logger.error(err.getMessage(), err);
+								}
+							});
 						}
-					}
+						else
+						{
+							logger.error(throwable.getMessage(), throwable);
+						}
+					}));
 				}
 				catch (Exception e)
 				{
@@ -164,8 +177,8 @@ public class Application
 				}
 			},
 			0, // How long to delay the start
-			500, // How long between executions
-			TimeUnit.MILLISECONDS); // The time unit used
+			15, // How long between executions
+			TimeUnit.SECONDS); // The time unit used
 	}
 
 	public CompletableFuture<Boolean> finishExecutor()
