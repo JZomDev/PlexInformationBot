@@ -3,9 +3,12 @@ package org.plexinfobot.workers;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-public class VideoQualityProfiles {
+public class VideoQualityProfiles
+{
 	public static final Map<Integer, String> VIDEO_QUALITY_PROFILES;
-	static {
+
+	static
+	{
 		VIDEO_QUALITY_PROFILES = new LinkedHashMap<>();
 		VIDEO_QUALITY_PROFILES.put(20000, "20 Mbps 1080p");
 		VIDEO_QUALITY_PROFILES.put(12000, "12 Mbps 1080p");

@@ -6,9 +6,8 @@ import org.apache.logging.log4j.Logger;
 
 public class Main
 {
-	private static final Logger logger = LogManager.getLogger(Main.class);
-
 	public static final String DISCORD_MESSAGE = "React to this message to get your roles!";
+	private static final Logger logger = LogManager.getLogger(Main.class);
 	private static final String CURRENT_VERSION = "3.1.1";
 	public static String DISCORD_TOKEN = "";
 	public static String IP = "";

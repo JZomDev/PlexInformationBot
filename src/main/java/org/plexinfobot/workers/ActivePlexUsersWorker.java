@@ -6,8 +6,8 @@ import kekolab.javaplex.PlexEpisode;
 import kekolab.javaplex.PlexMediatag;
 import kekolab.javaplex.PlexMovie;
 import kekolab.javaplex.PlexPart;
-import org.plexinfobot.Application;
 import org.javacord.api.DiscordApi;
+import org.plexinfobot.Application;
 
 public class ActivePlexUsersWorker
 {
@@ -16,12 +16,12 @@ public class ActivePlexUsersWorker
 		return CompletableFuture.supplyAsync(() -> {
 			try
 			{
-				List<PlexMediatag<?>> mediatags = application.getSessions(); // A list of all the items being streamed
+				List<PlexMediatag<?>> plexMediaTagList = application.getSessions(); // A list of all the items being streamed
 
-				int totalTotal = mediatags.size();
+				int totalTotal = plexMediaTagList.size();
 				int directPlayTotal = 0;
 				int transcodeTotal = 0;
-				for (PlexMediatag<?> plexMediatag : mediatags)
+				for (PlexMediatag<?> plexMediatag : plexMediaTagList)
 				{
 					if (plexMediatag instanceof PlexMovie plexMovie)
 					{

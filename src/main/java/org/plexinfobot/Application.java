@@ -3,6 +3,7 @@ package org.plexinfobot;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -16,6 +17,9 @@ import kekolab.javaplex.PlexMediatag;
 import kekolab.javaplex.PlexStatus;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.javacord.api.DiscordApi;
+import org.javacord.api.DiscordApiBuilder;
+import org.javacord.api.entity.channel.TextChannel;
 import static org.plexinfobot.Main.DISCORD_TOKEN;
 import static org.plexinfobot.Main.IP;
 import static org.plexinfobot.Main.MESSAGEID;
@@ -29,23 +33,18 @@ import org.plexinfobot.listeners.ReactListener;
 import org.plexinfobot.listeners.RoleListener;
 import org.plexinfobot.listeners.ServerBecomesAvailable;
 import org.plexinfobot.workers.CountPlexUsersWorker;
+import org.plexinfobot.workers.PlexFriendlyName;
 import org.plexinfobot.workers.PlexInformationWorker;
-import org.javacord.api.DiscordApi;
-import org.javacord.api.DiscordApiBuilder;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.message.embed.EmbedBuilder;
 
 public class Application
 {
-
 	private final Logger logger = LogManager.getLogger(Application.class);
 
 	DiscordApi discordApi = null;
 	private ScheduledExecutorService mService;
 	private PlexMediaServer plexMediaServer;
 	private PlexApi plexApi;
-
+	private HashMap<String, String> friendllyUserNames;
 
 	public Application()
 	{
@@ -92,10 +91,9 @@ public class Application
 			mService = Executors.newScheduledThreadPool(2);
 		}
 		CountPlexUsersWorker countPlexUsersWorker = new CountPlexUsersWorker();
-		PlexInformationWorker plexInformationWorker = new PlexInformationWorker();
+		PlexInformationWorker plexInformationWorker = new PlexInformationWorker(new PlexFriendlyName());
 
 		mService.scheduleWithFixedDelay(() -> {
-				// Perform your recurring method calls in here.
 				try
 				{
 					countPlexUsersWorker.execute(api, getSessions()).whenComplete((str, err) ->
@@ -130,7 +128,6 @@ public class Application
 			TimeUnit.SECONDS); // The time unit used
 
 		mService.scheduleWithFixedDelay(() -> {
-				// Perform your recurring method calls in here.
 				try
 				{
 					if (api.getTextChannelById(TEXT_CHANNELID).isEmpty())
@@ -227,10 +224,16 @@ public class Application
 		PlexApi.Builder apiBuilder = PlexApi.Builder.withDefaultHttpClient();
 		apiBuilder.withPlexDeviceName("Plex Information Bot");
 		plexApi = apiBuilder.build();
+		friendllyUserNames = new HashMap<>();
 		if (!PLEX_KEY.isEmpty())
 		{
 			plexApi.withToken(PLEX_KEY);
 		}
+	}
+
+	public HashMap<String, String> getFriendlyUserNames()
+	{
+		return friendllyUserNames;
 	}
 
 	public PlexMediaServer getServer()
@@ -256,8 +259,8 @@ public class Application
 		}
 		catch (Exception e)
 		{
+			logger.error(e.getMessage(), e);
 			return null;
 		}
 	}
 }
-
