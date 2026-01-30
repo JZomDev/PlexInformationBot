@@ -1,5 +1,5 @@
 # temp container to build using gradle
-FROM gradle:7.6.3-jdk17-alpine AS builder
+FROM gradle:8.5-jdk21-alpine AS builder
 
 COPY . /home/gradle/src
 
@@ -8,7 +8,7 @@ WORKDIR /home/gradle/src
 RUN gradle fatJar --no-daemon --info
 
 # package stage
-FROM eclipse-temurin:17-jdk
+FROM eclipse-temurin:21-jre
 
 RUN mkdir -p /srv
 WORKDIR /srv

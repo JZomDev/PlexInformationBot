@@ -1,5 +1,3 @@
-import org.gradle.api.JavaVersion.VERSION_17
-
 plugins {
     application
 
@@ -9,10 +7,6 @@ group = "org.plexinfobot"
 version = ""
 
 description = "A plex information bot."
-
-java {
-    sourceCompatibility = VERSION_17
-}
 
 repositories {
     mavenCentral()
@@ -32,11 +26,25 @@ dependencies {
 application {
     mainClass.set("org.plexinfobot.Main")
 }
-val fatJar = task("fatJar", type = Jar::class) {
-    baseName = "${project.name}"
+
+// Configure Gradle Java toolchain to use Java 21 and compile to Java 21 bytecode
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(21))
+    }
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    // Ensure generated classes target Java 21
+    options.release.set(21)
+}
+
+val fatJar = tasks.register<Jar>("fatJar") {
+    archiveBaseName.set(project.name)
+    archiveVersion.set(project.version.toString())
     manifest {
         attributes["Implementation-Title"] = "Gradle Jar File Example"
-        attributes["Implementation-Version"] = version
+        attributes["Implementation-Version"] = project.version.toString()
         attributes["Main-Class"] = "org.plexinfobot.Main"
     }
     from(configurations.runtimeClasspath.get().map({ if (it.isDirectory) it else zipTree(it) }))
@@ -47,6 +55,17 @@ tasks.withType<org.gradle.jvm.tasks.Jar>() {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     exclude("META-INF/BC1024KE.RSA", "META-INF/BC1024KE.SF", "META-INF/BC1024KE.DSA")
     exclude("META-INF/BC2048KE.RSA", "META-INF/BC2048KE.SF", "META-INF/BC2048KE.DSA")
+}
+
+// Ensure distribution and start scripts run after fatJar to avoid implicit dependency errors
+tasks.named("startScripts") {
+    dependsOn(fatJar)
+}
+tasks.named("distTar") {
+    dependsOn(fatJar)
+}
+tasks.named("distZip") {
+    dependsOn(fatJar)
 }
 
 tasks {
