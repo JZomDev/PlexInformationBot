@@ -15,9 +15,15 @@ public class Main
 	public static String PLEX_KEY = "";
 	public static String ROLE_ID = "";
 	public static String TEXT_CHANNELID = "";
+	public static String QUEUE_TEXT_CHANNELID = "";
 	public static String MESSAGEID = "";
+	public static String QUEUEMESSAGEID = "";
 	public static String API_KEY = "";
 	public static String TAUTULLI_URL = "";
+	public static String SONARR_URL = "";
+	public static String SONARR_API = "";
+	public static String RADARR_URL = "";
+	public static String RADARR_API = "";
 
 	static
 	{
@@ -60,6 +66,30 @@ public class Main
 			if (envName.equals("TAUTULLI_URL"))
 			{
 				TAUTULLI_URL = env_var.get(envName);
+			}
+			if (envName.equals("QUEUEMESSAGEID"))
+			{
+				QUEUEMESSAGEID = env_var.get(envName);
+			}
+			if (envName.equals("QUEUE_TEXT_CHANNELID"))
+			{
+				QUEUE_TEXT_CHANNELID = env_var.get(envName);
+			}
+			if (envName.equals("RADARR_URL"))
+			{
+				RADARR_URL = env_var.get(envName);
+			}
+			if (envName.equals("RADARR_API"))
+			{
+				RADARR_API = env_var.get(envName);
+			}
+			if (envName.equals("SONARR_URL"))
+			{
+				SONARR_URL = env_var.get(envName);
+			}
+			if (envName.equals("SONARR_API"))
+			{
+				SONARR_API = env_var.get(envName);
 			}
 		}
 	}

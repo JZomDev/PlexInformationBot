@@ -1,8 +1,21 @@
 package org.plexinfobot;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URL;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -20,19 +33,14 @@ import org.apache.logging.log4j.Logger;
 import org.javacord.api.DiscordApi;
 import org.javacord.api.DiscordApiBuilder;
 import org.javacord.api.entity.channel.TextChannel;
-import static org.plexinfobot.Main.DISCORD_TOKEN;
-import static org.plexinfobot.Main.IP;
-import static org.plexinfobot.Main.MESSAGEID;
-import static org.plexinfobot.Main.PLEX_KEY;
-import static org.plexinfobot.Main.PORT;
-import static org.plexinfobot.Main.ROLE_ID;
-import static org.plexinfobot.Main.TEXT_CHANNELID;
+import static org.plexinfobot.Main.*;
 import org.plexinfobot.listeners.MessageListener;
 import org.plexinfobot.listeners.PlexListener;
 import org.plexinfobot.listeners.ReactListener;
 import org.plexinfobot.listeners.RoleListener;
 import org.plexinfobot.listeners.ServerBecomesAvailable;
 import org.plexinfobot.workers.CountPlexUsersWorker;
+import org.plexinfobot.workers.DownloadQueueWorker;
 import org.plexinfobot.workers.PlexFriendlyName;
 import org.plexinfobot.workers.PlexInformationWorker;
 
@@ -92,6 +100,7 @@ public class Application
 		}
 		CountPlexUsersWorker countPlexUsersWorker = new CountPlexUsersWorker();
 		PlexInformationWorker plexInformationWorker = new PlexInformationWorker(new PlexFriendlyName());
+		DownloadQueueWorker downloadQueueWorker = new DownloadQueueWorker();
 
 		mService.scheduleWithFixedDelay(() -> {
 				try
@@ -175,6 +184,56 @@ public class Application
 			},
 			0, // How long to delay the start
 			15, // How long between executions
+			TimeUnit.SECONDS); // The time unit used
+
+
+		mService.scheduleWithFixedDelay(() -> {
+				try
+				{
+					if (api.getTextChannelById(QUEUE_TEXT_CHANNELID).isEmpty())
+					{
+						return;
+					}
+					TextChannel textChannel = api.getTextChannelById(QUEUE_TEXT_CHANNELID).get();
+					downloadQueueWorker.execute(api, this).whenComplete(((embedBuilder, throwable) ->
+					{
+						if (throwable == null)
+						{
+							api.getMessageById(QUEUEMESSAGEID, textChannel).whenComplete((msg, err) ->
+							{
+								if (err == null)
+								{
+									msg.edit(embedBuilder);
+									LocalDateTime myObj = LocalDateTime.now();
+									logger.info("Message was modified at {}", myObj.toString());
+								}
+								else
+								{
+									logger.error(err.getMessage(), err);
+								}
+							});
+						}
+						else
+						{
+							logger.error(throwable.getMessage(), throwable);
+						}
+					}));
+				}
+				catch (Exception e)
+				{
+					try
+					{
+						finishExecutor().join();
+					}
+					catch (Exception e2)
+					{
+						throw new RuntimeException(e2);
+					}
+					logger.error(e.getMessage(), e);
+				}
+			},
+			0, // How long to delay the start
+			120, // How long between executions
 			TimeUnit.SECONDS); // The time unit used
 	}
 
@@ -261,6 +320,325 @@ public class Application
 		{
 			logger.error(e.getMessage(), e);
 			return null;
+		}
+	}
+
+	private String getMovieName(String id) throws IOException
+	{
+		String urlStr = "http://" + RADARR_URL + "/api/v3/movie";
+
+		HttpURLConnection connection = null;
+		try
+		{
+			URL url = new URL(urlStr);
+			connection = (HttpURLConnection) url.openConnection();
+			connection.setRequestMethod("GET");
+			connection.setRequestProperty("accept", "application/json");
+			connection.setRequestProperty("X-API-Key", RADARR_API);
+			connection.connect();
+
+			if (connection.getResponseCode() >= 400)
+			{
+				logger.error("Radarr queue request failed with status {}", connection.getResponseCode());
+				return "unknown";
+			}
+
+			try (InputStream stream = connection.getInputStream(); InputStreamReader reader = new InputStreamReader(stream))
+			{
+				JsonElement root = JsonParser.parseReader(reader);
+				if (!root.isJsonArray())
+				{
+					return "unknown";
+				}
+
+				JsonArray items = root.getAsJsonArray();
+				for (JsonElement item : items)
+				{
+					if (!item.isJsonObject())
+					{
+						continue;
+					}
+
+					if (item.getAsJsonObject().get("id").getAsString().equals(id))
+					{
+						String title = item.getAsJsonObject().get("title").getAsString();
+						String year = item.getAsJsonObject().get("year").getAsString();
+						return title + " (" + year + ")";
+					}
+				}
+			}
+		}
+		catch (Exception e)
+		{
+			logger.error(e.getMessage(), e);
+			return "unknown";
+		}
+
+		return "unknown";
+
+	}
+
+	private String getTVShowName(String id) throws IOException
+	{
+		String urlStr = "http://" + SONARR_URL + "/api/v3/movie";
+
+		HttpURLConnection connection = null;
+		try
+		{
+			URL url = new URL(urlStr);
+			connection = (HttpURLConnection) url.openConnection();
+			connection.setRequestMethod("GET");
+			connection.setRequestProperty("accept", "application/json");
+			connection.setRequestProperty("X-API-Key", SONARR_API);
+			connection.connect();
+
+			if (connection.getResponseCode() >= 400)
+			{
+				logger.error("Radarr queue request failed with status {}", connection.getResponseCode());
+				return "unknown";
+			}
+
+			try (InputStream stream = connection.getInputStream(); InputStreamReader reader = new InputStreamReader(stream))
+			{
+				JsonElement root = JsonParser.parseReader(reader);
+				if (!root.isJsonArray())
+				{
+					return "unknown";
+				}
+
+				JsonArray items = root.getAsJsonArray();
+				for (JsonElement item : items)
+				{
+					if (!item.isJsonObject())
+					{
+						continue;
+					}
+
+					if (item.getAsJsonObject().get("id").getAsString().equals(id))
+					{
+						String title = item.getAsJsonObject().get("title").getAsString();
+						String year = item.getAsJsonObject().get("year").getAsString();
+						return title + " (" + year + ")";
+					}
+				}
+			}
+		}
+		catch (Exception e)
+		{
+			logger.error(e.getMessage(), e);
+			return "unknown";
+		}
+
+		return "unknown";
+
+	}
+
+	public List<DownloadDetails> getQueueDetailsRadarr() throws IOException
+	{
+		List<DownloadDetails> queueDetails = new ArrayList<>();
+		String urlStr = "http://" + RADARR_URL + "/api/v3/queue/details";
+
+		HttpURLConnection connection = null;
+		try
+		{
+			URL url = new URL(urlStr);
+			connection = (HttpURLConnection) url.openConnection();
+			connection.setRequestMethod("GET");
+			connection.setRequestProperty("accept", "application/json");
+			connection.setRequestProperty("X-API-Key", RADARR_API);
+			connection.connect();
+
+			if (connection.getResponseCode() >= 400)
+			{
+				logger.error("Radarr queue request failed with status {}", connection.getResponseCode());
+				return queueDetails;
+			}
+
+			try (InputStream stream = connection.getInputStream(); InputStreamReader reader = new InputStreamReader(stream))
+			{
+				JsonElement root = JsonParser.parseReader(reader);
+				if (!root.isJsonArray())
+				{
+					return queueDetails;
+				}
+
+				JsonArray items = root.getAsJsonArray();
+				for (JsonElement item : items)
+				{
+					if (!item.isJsonObject())
+					{
+						continue;
+					}
+
+					JsonObject queueItem = item.getAsJsonObject();
+					queueDetails.add(new DownloadDetails(
+						getStringOrEmpty(queueItem, "status"),
+						getMovieName(getStringOrEmpty(queueItem, "movieId")),
+						getLongOrZero(queueItem, "size"),
+						getStringOrEmpty(queueItem, "added"),
+						toHammertime(getStringOrEmpty(queueItem, "estimatedCompletionTime"))));
+				}
+			}
+		}
+		finally
+		{
+			if (connection != null)
+			{
+				connection.disconnect();
+			}
+		}
+
+		return queueDetails;
+	}
+
+	public List<DownloadDetails> getQueueDtailsSonarr() throws IOException
+	{
+		List<DownloadDetails> queueDetails = new ArrayList<>();
+		String urlStr = "http://" + SONARR_URL + "/api/v3/queue/details";
+
+		HttpURLConnection connection = null;
+		try
+		{
+			URL url = new URL(urlStr);
+			connection = (HttpURLConnection) url.openConnection();
+			connection.setRequestMethod("GET");
+			connection.setRequestProperty("accept", "application/json");
+			connection.setRequestProperty("X-API-Key", SONARR_API);
+			connection.connect();
+
+			if (connection.getResponseCode() >= 400)
+			{
+				logger.error("Radarr queue request failed with status {}", connection.getResponseCode());
+				return queueDetails;
+			}
+
+			try (InputStream stream = connection.getInputStream(); InputStreamReader reader = new InputStreamReader(stream))
+			{
+				JsonElement root = JsonParser.parseReader(reader);
+				if (!root.isJsonArray())
+				{
+					return queueDetails;
+				}
+
+				JsonArray items = root.getAsJsonArray();
+				for (JsonElement item : items)
+				{
+					if (!item.isJsonObject())
+					{
+						continue;
+					}
+
+					JsonObject queueItem = item.getAsJsonObject();
+					queueDetails.add(new DownloadDetails(
+						getStringOrEmpty(queueItem, "status"),
+						getMovieName(getStringOrEmpty(queueItem, "movieId")),
+						getLongOrZero(queueItem, "size"),
+						getStringOrEmpty(queueItem, "added"),
+						toHammertime(getStringOrEmpty(queueItem, "estimatedCompletionTime"))));
+				}
+			}
+		}
+		finally
+		{
+			if (connection != null)
+			{
+				connection.disconnect();
+			}
+		}
+
+		return queueDetails;
+	}
+
+	private String getStringOrEmpty(JsonObject obj, String key)
+	{
+		if (!obj.has(key) || obj.get(key).isJsonNull())
+		{
+			return "";
+		}
+		return obj.get(key).getAsString();
+	}
+
+	private long getLongOrZero(JsonObject obj, String key)
+	{
+		if (!obj.has(key) || obj.get(key).isJsonNull())
+		{
+			return 0L;
+		}
+		return obj.get(key).getAsLong();
+	}
+
+	public static class DownloadDetails
+	{
+		private final String status;
+		private final String outputPath;
+		private final long size;
+		private final String added;
+		private final String estimatedCompletionTime;
+
+		public DownloadDetails(String status, String outputPath, long size, String added, String estimatedCompletionTime)
+		{
+			this.status = status;
+			this.outputPath = outputPath;
+			this.size = size;
+			this.added = added;
+			this.estimatedCompletionTime = estimatedCompletionTime;
+		}
+
+		public String getOutputPath()
+		{
+			return outputPath;
+		}
+
+		public String getStatus()
+		{
+			return status;
+		}
+
+		public long getSize()
+		{
+			return size;
+		}
+
+		public String getAdded()
+		{
+			return added;
+		}
+
+		public String getEstimatedCompletionTime()
+		{
+			return estimatedCompletionTime;
+		}
+	}
+
+	private String toHammertime(String isoDateTime)
+	{
+		if (isoDateTime == null || isoDateTime.isBlank())
+		{
+			return "unknown";
+		}
+
+		try
+		{
+			long epochSeconds = Instant.parse(isoDateTime).getEpochSecond();
+			long currentTime = System.currentTimeMillis() / 1000;
+			if (epochSeconds < currentTime)
+			{
+				return "unknown";
+			}
+			return "<t:" + epochSeconds + ":R>";
+		}
+		catch (DateTimeParseException ignored)
+		{
+			try
+			{
+				long epochSeconds = LocalDateTime.parse(isoDateTime).toEpochSecond(ZoneOffset.UTC);
+				return "<t:" + epochSeconds + ":R>";
+			}
+			catch (DateTimeParseException ex)
+			{
+				logger.warn("Unable to parse estimatedCompletionTime: {}", isoDateTime);
+				return isoDateTime;
+			}
 		}
 	}
 }
