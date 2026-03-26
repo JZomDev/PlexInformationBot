@@ -82,13 +82,24 @@ public class ReactListener implements ReactionAddListener, ReactionRemoveListene
 	private boolean isCorrectMessage(SingleReactionEvent event)
 	{
 		long botUserID = event.getApi().getYourself().getId();
-		long messageID = event.getMessageAuthor().get().getId();
-		if (botUserID != messageID)
+		if (event.getMessageAuthor().isPresent())
+		{
+			long authorID = event.getMessageAuthor().get().getId();
+			if (botUserID != authorID)
+			{
+				return false;
+			}
+		}
+		if (event.getMessageContent().isEmpty())
 		{
 			return false;
 		}
-		String messageContent = event.getMessageContent().get();
-		return messageContent.equals(Main.DISCORD_MESSAGE);
+		if (event.getMessageContent().isPresent())
+		{
+			String messageContent = event.getMessageContent().get();
+			return messageContent.equals(Main.DISCORD_MESSAGE);
+		}
+		return false;
 	}
 
 	private boolean isBotUser(SingleReactionEvent event)
