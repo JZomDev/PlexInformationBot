@@ -29,7 +29,7 @@ public class DMListener implements MessageCreateListener
 		this.api = api;
 		this.userID = userID;
 		this.plexMediaServer = plexMediaServer;
-		timer = new Timer();
+		timer = new Timer(true);
 		timer.schedule(new StopListener(this), Date.from(Instant.now().plus(86400, ChronoUnit.SECONDS)));
 	}
 
@@ -108,6 +108,7 @@ public class DMListener implements MessageCreateListener
 			if (dmListener != null)
 			{
 				api.removeListener(dmListener);
+				timer.cancel();
 				api.getUserById(userID).join().sendMessage("Timed Out. Message Server Admin with your email so They Can Add You Manually.");
 			}
 		}

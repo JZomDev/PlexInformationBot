@@ -1,38 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Configuration name="Plex Info Bot" status="INFO" strict="true">
+<Configuration name="Plex Info Bot" status="WARN" strict="true">
 	<Properties>
 		<Property name="LOG_DIR">/var/log</Property>
+		<Property name="LOG_FILE">${LOG_DIR}/plexinfobot.log</Property>
 	</Properties>
 
 	<Appenders>
-		<Console name="Console Appender">
-			<PatternLayout>
-				<Pattern><![CDATA[%d <%-5p> <%-35.35t> <%x> <%X> <%50.50c> %m%n]]></Pattern>
-			</PatternLayout>
-			<Filters>
-				<ThresholdFilter level="INFO"/>
-			</Filters>
-		</Console>
 		<RollingFile
-				name="File Appender"
-				fileName="${LOG_DIR}/plexinfobot.log"
-				filePattern="${LOG_DIR}/plexinfobot.%d{dd-MMM-yyyy}.log"
-				ignoreExceptions="false">
+			name="File Appender"
+			fileName="${LOG_FILE}"
+			filePattern="${LOG_DIR}/plexinfobot.%d{yyyy-MM-dd}.%i.log.gz"
+			ignoreExceptions="false">
 			<PatternLayout>
-				<Pattern>%d{yyyy-MM-dd HH:mm:ss} %-5p %m%n</Pattern>
+				<Pattern>%d{yyyy-MM-dd HH:mm:ss} %-5p %c{1} - %m%n</Pattern>
 			</PatternLayout>
-			<Filters>
-				<ThresholdFilter level="INFO"/>
-			</Filters>
 			<Policies>
 				<TimeBasedTriggeringPolicy interval="1"/>
+				<SizeBasedTriggeringPolicy size="10 MB"/>
 			</Policies>
-			<DefaultRolloverStrategy max="5" />
+			<DefaultRolloverStrategy max="8" />
 		</RollingFile>
 	</Appenders>
 	<Loggers>
-		<Root level="DEBUG">
-			<AppenderRef ref="Console Appender"/>
+		<Root level="INFO">
 			<AppenderRef ref="File Appender"/>
 		</Root>
 	</Loggers>

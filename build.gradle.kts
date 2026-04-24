@@ -10,6 +10,7 @@ description = "A plex information bot."
 
 repositories {
     mavenCentral()
+    maven { url = uri("https://jitpack.io") }
 }
 
 dependencies {
@@ -21,6 +22,8 @@ dependencies {
     implementation ("org.apache.httpcomponents.client5:httpclient5:5.3")
     implementation ("com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.14.0-rc2")
     implementation ("com.fasterxml.jackson.core:jackson-databind:2.13.4.2")
+
+    implementation("com.github.kekolab:javaplex:6.1.0")
 }
 
 application {

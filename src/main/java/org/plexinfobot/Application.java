@@ -18,12 +18,14 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import kekolab.javaplex.PlexApi;
 import kekolab.javaplex.PlexMediaServer;
 import kekolab.javaplex.PlexMediatag;
@@ -53,6 +55,9 @@ public class Application
 	private PlexMediaServer plexMediaServer;
 	private PlexApi plexApi;
 	private HashMap<String, String> friendllyUserNames;
+	private final AtomicBoolean activityTaskRunning = new AtomicBoolean(false);
+	private final AtomicBoolean statusEmbedTaskRunning = new AtomicBoolean(false);
+	private final AtomicBoolean queueEmbedTaskRunning = new AtomicBoolean(false);
 
 	public Application()
 	{
@@ -103,24 +108,37 @@ public class Application
 		DownloadQueueWorker downloadQueueWorker = new DownloadQueueWorker();
 
 		mService.scheduleWithFixedDelay(() -> {
+				if (!activityTaskRunning.compareAndSet(false, true))
+				{
+					logger.debug("Skipping activity update, previous run still in progress");
+					return;
+				}
 				try
 				{
 					countPlexUsersWorker.execute(api, getSessions()).whenComplete((str, err) ->
 					{
-						if (err == null)
+						try
 						{
-							api.updateActivity(str);
-							LocalDateTime myObj = LocalDateTime.now();
-							logger.info("Activity was modified at {}", myObj.toString());
+							if (err == null)
+							{
+								api.updateActivity(str);
+								LocalDateTime myObj = LocalDateTime.now();
+								logger.debug("Activity was modified at {}", myObj.toString());
+							}
+							else
+							{
+								logger.error(err.getMessage(), err);
+							}
 						}
-						else
+						finally
 						{
-							logger.error(err.getMessage(), err);
+							activityTaskRunning.set(false);
 						}
 					});
 				}
 				catch (Exception e)
 				{
+					activityTaskRunning.set(false);
 					try
 					{
 						finishExecutor().join();
@@ -137,40 +155,57 @@ public class Application
 			TimeUnit.SECONDS); // The time unit used
 
 		mService.scheduleWithFixedDelay(() -> {
+				if (!statusEmbedTaskRunning.compareAndSet(false, true))
+				{
+					logger.debug("Skipping status message update, previous run still in progress");
+					return;
+				}
 				try
 				{
 					if (api.getTextChannelById(TEXT_CHANNELID).isEmpty())
 					{
+						statusEmbedTaskRunning.set(false);
 						return;
 					}
 					TextChannel textChannel = api.getTextChannelById(TEXT_CHANNELID).get();
 
 					plexInformationWorker.execute(api, getServer(), getSessions()).whenComplete(((embedBuilder, throwable) ->
 					{
-						if (throwable == null)
+						try
 						{
-							api.getMessageById(MESSAGEID, textChannel).whenComplete((msg, err) ->
+							if (throwable == null)
 							{
-								if (err == null)
+								api.getMessageById(MESSAGEID, textChannel).whenComplete((msg, err) ->
 								{
-									msg.edit(embedBuilder);
-									LocalDateTime myObj = LocalDateTime.now();
-									logger.info("Message was modified at {}", myObj.toString());
-								}
-								else
-								{
-									logger.error(err.getMessage(), err);
-								}
-							});
+									if (err == null)
+									{
+										msg.edit(embedBuilder);
+										LocalDateTime myObj = LocalDateTime.now();
+										logger.debug("Message was modified at {}", myObj.toString());
+									}
+									else
+									{
+										logger.error(err.getMessage(), err);
+									}
+									statusEmbedTaskRunning.set(false);
+								});
+							}
+							else
+							{
+								logger.error(throwable.getMessage(), throwable);
+								statusEmbedTaskRunning.set(false);
+							}
 						}
-						else
+						catch (Exception e)
 						{
-							logger.error(throwable.getMessage(), throwable);
+							statusEmbedTaskRunning.set(false);
+							logger.error(e.getMessage(), e);
 						}
 					}));
 				}
 				catch (Exception e)
 				{
+					statusEmbedTaskRunning.set(false);
 					try
 					{
 						finishExecutor().join();
@@ -188,39 +223,56 @@ public class Application
 
 
 		mService.scheduleWithFixedDelay(() -> {
+				if (!queueEmbedTaskRunning.compareAndSet(false, true))
+				{
+					logger.debug("Skipping queue message update, previous run still in progress");
+					return;
+				}
 				try
 				{
 					if (api.getTextChannelById(QUEUE_TEXT_CHANNELID).isEmpty())
 					{
+						queueEmbedTaskRunning.set(false);
 						return;
 					}
 					TextChannel textChannel = api.getTextChannelById(QUEUE_TEXT_CHANNELID).get();
 					downloadQueueWorker.execute(api, this).whenComplete(((embedBuilder, throwable) ->
 					{
-						if (throwable == null)
+						try
 						{
-							api.getMessageById(QUEUEMESSAGEID, textChannel).whenComplete((msg, err) ->
+							if (throwable == null)
 							{
-								if (err == null)
+								api.getMessageById(QUEUEMESSAGEID, textChannel).whenComplete((msg, err) ->
 								{
-									msg.edit(embedBuilder);
-									LocalDateTime myObj = LocalDateTime.now();
-									logger.info("Message was modified at {}", myObj.toString());
-								}
-								else
-								{
-									logger.error(err.getMessage(), err);
-								}
-							});
+									if (err == null)
+									{
+										msg.edit(embedBuilder);
+										LocalDateTime myObj = LocalDateTime.now();
+										logger.debug("Queue message was modified at {}", myObj.toString());
+									}
+									else
+									{
+										logger.error(err.getMessage(), err);
+									}
+									queueEmbedTaskRunning.set(false);
+								});
+							}
+							else
+							{
+								logger.error(throwable.getMessage(), throwable);
+								queueEmbedTaskRunning.set(false);
+							}
 						}
-						else
+						catch (Exception e)
 						{
-							logger.error(throwable.getMessage(), throwable);
+							queueEmbedTaskRunning.set(false);
+							logger.error(e.getMessage(), e);
 						}
 					}));
 				}
 				catch (Exception e)
 				{
+					queueEmbedTaskRunning.set(false);
 					try
 					{
 						finishExecutor().join();
@@ -325,6 +377,19 @@ public class Application
 
 	private String getMovieName(String id) throws IOException
 	{
+		Map<String, String> movieTitles = getMovieTitlesById();
+		return movieTitles.getOrDefault(id, "unknown");
+	}
+
+	private String getTVShowName(String id) throws IOException
+	{
+		Map<String, String> seriesTitles = getSeriesTitlesById();
+		return seriesTitles.getOrDefault(id, "unknown");
+	}
+
+	private Map<String, String> getMovieTitlesById() throws IOException
+	{
+		Map<String, String> titlesById = new HashMap<>();
 		String urlStr = "http://" + RADARR_URL + "/api/v3/movie";
 
 		HttpURLConnection connection = null;
@@ -339,8 +404,8 @@ public class Application
 
 			if (connection.getResponseCode() >= 400)
 			{
-				logger.error("Radarr queue request failed with status {}", connection.getResponseCode());
-				return "unknown";
+				logger.error("Radarr movies request failed with status {}", connection.getResponseCode());
+				return titlesById;
 			}
 
 			try (InputStream stream = connection.getInputStream(); InputStreamReader reader = new InputStreamReader(stream))
@@ -348,7 +413,7 @@ public class Application
 				JsonElement root = JsonParser.parseReader(reader);
 				if (!root.isJsonArray())
 				{
-					return "unknown";
+					return titlesById;
 				}
 
 				JsonArray items = root.getAsJsonArray();
@@ -359,28 +424,33 @@ public class Application
 						continue;
 					}
 
-					if (item.getAsJsonObject().get("id").getAsString().equals(id))
+					JsonObject movie = item.getAsJsonObject();
+					String movieId = getStringOrEmpty(movie, "id");
+					if (movieId.isEmpty())
 					{
-						String title = item.getAsJsonObject().get("title").getAsString();
-						String year = item.getAsJsonObject().get("year").getAsString();
-						return title + " (" + year + ")";
+						continue;
 					}
+					String title = getStringOrEmpty(movie, "title");
+					String year = getStringOrEmpty(movie, "year");
+					titlesById.put(movieId, year.isEmpty() ? title : title + " (" + year + ")");
 				}
 			}
 		}
-		catch (Exception e)
+		finally
 		{
-			logger.error(e.getMessage(), e);
-			return "unknown";
+			if (connection != null)
+			{
+				connection.disconnect();
+			}
 		}
 
-		return "unknown";
-
+		return titlesById;
 	}
 
-	private String getTVShowName(String id) throws IOException
+	private Map<String, String> getSeriesTitlesById() throws IOException
 	{
-		String urlStr = "http://" + SONARR_URL + "/api/v3/movie";
+		Map<String, String> titlesById = new HashMap<>();
+		String urlStr = "http://" + SONARR_URL + "/api/v3/series";
 
 		HttpURLConnection connection = null;
 		try
@@ -394,8 +464,8 @@ public class Application
 
 			if (connection.getResponseCode() >= 400)
 			{
-				logger.error("Radarr queue request failed with status {}", connection.getResponseCode());
-				return "unknown";
+				logger.error("Sonarr series request failed with status {}", connection.getResponseCode());
+				return titlesById;
 			}
 
 			try (InputStream stream = connection.getInputStream(); InputStreamReader reader = new InputStreamReader(stream))
@@ -403,7 +473,7 @@ public class Application
 				JsonElement root = JsonParser.parseReader(reader);
 				if (!root.isJsonArray())
 				{
-					return "unknown";
+					return titlesById;
 				}
 
 				JsonArray items = root.getAsJsonArray();
@@ -414,29 +484,31 @@ public class Application
 						continue;
 					}
 
-					if (item.getAsJsonObject().get("id").getAsString().equals(id))
+					JsonObject series = item.getAsJsonObject();
+					String seriesId = getStringOrEmpty(series, "id");
+					if (!seriesId.isEmpty())
 					{
-						String title = item.getAsJsonObject().get("title").getAsString();
-						String year = item.getAsJsonObject().get("year").getAsString();
-						return title + " (" + year + ")";
+						titlesById.put(seriesId, getStringOrEmpty(series, "title"));
 					}
 				}
 			}
 		}
-		catch (Exception e)
+		finally
 		{
-			logger.error(e.getMessage(), e);
-			return "unknown";
+			if (connection != null)
+			{
+				connection.disconnect();
+			}
 		}
 
-		return "unknown";
-
+		return titlesById;
 	}
 
 	public List<DownloadDetails> getQueueDetailsRadarr() throws IOException
 	{
 		List<DownloadDetails> queueDetails = new ArrayList<>();
 		String urlStr = "http://" + RADARR_URL + "/api/v3/queue/details";
+		Map<String, String> movieTitlesById = getMovieTitlesById();
 
 		HttpURLConnection connection = null;
 		try
@@ -471,9 +543,10 @@ public class Application
 					}
 
 					JsonObject queueItem = item.getAsJsonObject();
+					String movieId = getStringOrEmpty(queueItem, "movieId");
 					queueDetails.add(new DownloadDetails(
 						getStringOrEmpty(queueItem, "status"),
-						getMovieName(getStringOrEmpty(queueItem, "movieId")),
+						movieTitlesById.getOrDefault(movieId, "unknown"),
 						getLongOrZero(queueItem, "size"),
 						getStringOrEmpty(queueItem, "added"),
 						toHammertime(getStringOrEmpty(queueItem, "estimatedCompletionTime"))));
@@ -495,6 +568,7 @@ public class Application
 	{
 		List<DownloadDetails> queueDetails = new ArrayList<>();
 		String urlStr = "http://" + SONARR_URL + "/api/v3/queue/details";
+		Map<String, String> seriesTitlesById = getSeriesTitlesById();
 
 		HttpURLConnection connection = null;
 		try
@@ -529,9 +603,10 @@ public class Application
 					}
 
 					JsonObject queueItem = item.getAsJsonObject();
+					String seriesId = getStringOrEmpty(queueItem, "seriesId");
 					queueDetails.add(new DownloadDetails(
 						getStringOrEmpty(queueItem, "status"),
-						getMovieName(getStringOrEmpty(queueItem, "movieId")),
+						seriesTitlesById.getOrDefault(seriesId, "unknown"),
 						getLongOrZero(queueItem, "size"),
 						getStringOrEmpty(queueItem, "added"),
 						toHammertime(getStringOrEmpty(queueItem, "estimatedCompletionTime"))));

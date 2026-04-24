@@ -29,18 +29,31 @@ public class ReactListener implements ReactionAddListener, ReactionRemoveListene
 	{
 		if (isCorrectReaction(event) && isCorrectMessage(event) && !isBotUser(event))
 		{
+			if (event.getUser().isEmpty() || event.getServer().isEmpty())
+			{
+				return;
+			}
+
 			User userReacted = event.getUser().get();
 			Server server = event.getServer().get();
 			Optional<Role> role = server.getRoleById(roleID);
-
-			role.ifPresent(value -> userReacted.addRole(value).whenComplete((unused, error) -> {
-					logger.info("Assigned role");
-				}
-			).exceptionally((e) ->
+			if (role.isEmpty())
 			{
-				logger.error("Failed to Assigned role\n" + e.getMessage(), e);
-				return null;
-			}));
+				logger.warn("Role {} not found when processing reaction add", roleID);
+				return;
+			}
+
+			Role assignedRole = role.get();
+			userReacted.addRole(assignedRole).whenComplete((unused, error) -> {
+				if (error == null)
+				{
+					logger.debug("Assigned role {} to user {}", assignedRole.getIdAsString(), userReacted.getIdAsString());
+				}
+				else
+				{
+					logger.warn("Failed to assign role {} to user {}: {}", assignedRole.getIdAsString(), userReacted.getIdAsString(), error.getMessage());
+				}
+			});
 		}
 	}
 
@@ -49,18 +62,31 @@ public class ReactListener implements ReactionAddListener, ReactionRemoveListene
 	{
 		if (isCorrectReaction(event) && isCorrectMessage(event) && !isBotUser(event))
 		{
+			if (event.getUser().isEmpty() || event.getServer().isEmpty())
+			{
+				return;
+			}
+
 			User userReacted = event.getUser().get();
 			Server server = event.getServer().get();
 			Optional<Role> role = server.getRoleById(roleID);
-
-			role.ifPresent(value -> userReacted.removeRole(value).whenComplete((unused, error) -> {
-					logger.info("Removed role");
-				}
-			).exceptionally((e) ->
+			if (role.isEmpty())
 			{
-				logger.error("Failed to remove role\n" + e.getMessage(), e);
-				return null;
-			}));
+				logger.warn("Role {} not found when processing reaction remove", roleID);
+				return;
+			}
+
+			Role removedRole = role.get();
+			userReacted.removeRole(removedRole).whenComplete((unused, error) -> {
+				if (error == null)
+				{
+					logger.debug("Removed role {} from user {}", removedRole.getIdAsString(), userReacted.getIdAsString());
+				}
+				else
+				{
+					logger.warn("Failed to remove role {} from user {}: {}", removedRole.getIdAsString(), userReacted.getIdAsString(), error.getMessage());
+				}
+			});
 		}
 	}
 
@@ -104,6 +130,10 @@ public class ReactListener implements ReactionAddListener, ReactionRemoveListene
 
 	private boolean isBotUser(SingleReactionEvent event)
 	{
+		if (event.getUser().isEmpty())
+		{
+			return false;
+		}
 		return event.getApi().getYourself().getId() == event.getUser().get().getId();
 	}
 }
