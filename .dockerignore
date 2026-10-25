@@ -12,3 +12,4 @@ docs
 *.md
 log
 out
+/config/
