@@ -32,6 +32,7 @@ import org.apache.logging.log4j.Logger;
 import org.example.bot.BotController;
 import org.example.bot.BotLifecycle;
 import org.example.bot.BotState;
+import org.example.bot.LoginWait;
 import org.example.config.AppConfig;
 import org.example.config.SettingsStore;
 import org.example.listeners.SetupCommandsListener;
@@ -62,6 +63,7 @@ public class Application implements BotController
 	private PlexMediaServer plexMediaServer;
 	private PlexApi plexApi;
 	private static final long SESSION_CACHE_MS = 2000;
+	private static final long LOGIN_TIMEOUT_SECONDS = 60;
 	private volatile String lastEmbedSignature = "";
 	private List<PlexMediatag<?>> cachedSessions;
 	private long cachedSessionsAt;
@@ -127,7 +129,7 @@ public class Application implements BotController
 		builder.addListener(new MessageListener());
 		builder.addListener(new RoleListener(this::getServer));
 
-		DiscordApi api = builder.login().join();
+		DiscordApi api = LoginWait.await(builder.login(), LOGIN_TIMEOUT_SECONDS, TimeUnit.SECONDS, DiscordApi::disconnect);
 		ScheduledExecutorService service;
 		try
 		{
