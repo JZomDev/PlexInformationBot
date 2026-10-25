@@ -35,6 +35,17 @@ class SessionManagerTest
 	}
 
 	@Test
+	void destroyAllRemovesEverySession()
+	{
+		SessionManager sessions = new SessionManager(new MutableClock());
+		SessionManager.Session a = sessions.create();
+		SessionManager.Session b = sessions.create();
+		sessions.destroyAll();
+		assertTrue(sessions.get(a.id()).isEmpty());
+		assertTrue(sessions.get(b.id()).isEmpty());
+	}
+
+	@Test
 	void idsAreUniqueAndLong()
 	{
 		SessionManager sessions = new SessionManager(new MutableClock());

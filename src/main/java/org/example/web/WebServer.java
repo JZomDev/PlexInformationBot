@@ -316,7 +316,10 @@ public class WebServer
 			HttpIo.sendError(ex, 500, "Could not save credentials");
 			return;
 		}
-		HttpIo.sendJson(ex, 200, Map.of("ok", true));
+		sessions.destroyAll();
+		SessionManager.Session fresh = sessions.create();
+		ex.getResponseHeaders().add("Set-Cookie", cookie(fresh.id(), 12 * 3600, https(ex)));
+		HttpIo.sendJson(ex, 200, Map.of("ok", true, "csrf", fresh.csrfToken()));
 	}
 
 	private void getSettings(HttpExchange ex, SessionManager.Session s) throws IOException
@@ -326,14 +329,29 @@ public class WebServer
 		HttpIo.sendJson(ex, 200, body);
 	}
 
+	/** Keys absent from the body keep the saved value; present keys (even empty) replace it. */
+	private Settings withAbsentKept(JsonObject body)
+	{
+		JsonObject merged = HttpIo.GSON.toJsonTree(settings.fileValues()).getAsJsonObject();
+		for (Map.Entry<String, com.google.gson.JsonElement> entry : body.entrySet())
+		{
+			if (merged.has(entry.getKey()) && !entry.getValue().isJsonNull())
+			{
+				merged.add(entry.getKey(), entry.getValue());
+			}
+		}
+		return HttpIo.GSON.fromJson(merged, Settings.class);
+	}
+
 	private void putSettings(HttpExchange ex, SessionManager.Session s) throws Exception
 	{
 		Settings submitted;
 		try
 		{
-			submitted = HttpIo.GSON.fromJson(HttpIo.readBody(ex), Settings.class);
+			JsonObject body = HttpIo.GSON.fromJson(HttpIo.readBody(ex), JsonObject.class);
+			submitted = body == null ? null : withAbsentKept(body);
 		}
-		catch (JsonParseException e)
+		catch (JsonParseException | IllegalStateException e)
 		{
 			submitted = null;
 		}

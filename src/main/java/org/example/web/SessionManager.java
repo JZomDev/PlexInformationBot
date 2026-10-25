@@ -52,6 +52,11 @@ public class SessionManager
 		}
 	}
 
+	public void destroyAll()
+	{
+		sessions.clear();
+	}
+
 	private void purgeExpired()
 	{
 		Instant now = clock.instant();

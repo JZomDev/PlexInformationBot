@@ -151,6 +151,9 @@ class WebServerTest
 		Client c = login("admin", "admin");
 		Res r = call("POST", "/api/credentials", creds("owner", "correct horse"), c);
 		assertEquals(200, r.status(), r.body());
+		String cookie = r.header("Set-Cookie");
+		c.sid = cookie.substring("sid=".length(), cookie.indexOf(';'));
+		c.csrf = r.json().get("csrf").getAsString();
 		return c;
 	}
 
@@ -172,7 +175,10 @@ class WebServerTest
 		assertTrue(s.get("mustChange").getAsBoolean());
 		assertEquals(403, call("GET", "/api/settings", null, c).status());
 		assertEquals(403, call("GET", "/api/status", null, c).status());
-		assertEquals(200, call("POST", "/api/credentials", creds("owner", "correct horse"), c).status());
+		Res changed = call("POST", "/api/credentials", creds("owner", "correct horse"), c);
+		assertEquals(200, changed.status());
+		c.sid = changed.header("Set-Cookie").substring(4, changed.header("Set-Cookie").indexOf(';'));
+		c.csrf = changed.json().get("csrf").getAsString();
 		assertFalse(call("GET", "/api/session", null, c).json().get("mustChange").getAsBoolean());
 		assertEquals(200, call("GET", "/api/settings", null, c).status());
 		assertEquals(200, call("GET", "/api/status", null, c).status());
@@ -391,6 +397,43 @@ class WebServerTest
 		assertTrue(r.header("Content-Type").startsWith("text/html"));
 		assertEquals(200, call("GET", "/index.html", null, null).status());
 		assertEquals(404, call("GET", "/missing.js", null, null).status());
+	}
+
+	@Test
+	void credentialChangeKillsOtherSessionsAndKeepsCaller() throws Exception
+	{
+		Client a = login("admin", "admin");
+		Client b = login("admin", "admin");
+		Res r = call("POST", "/api/credentials", creds("owner", "correct horse"), a);
+		assertEquals(200, r.status());
+		String cookie = r.header("Set-Cookie");
+		assertTrue(cookie.contains("HttpOnly") && cookie.contains("SameSite=Strict"));
+		a.sid = cookie.substring("sid=".length(), cookie.indexOf(';'));
+		a.csrf = r.json().get("csrf").getAsString();
+		assertEquals(401, call("GET", "/api/settings", null, b).status());
+		assertEquals(200, call("GET", "/api/settings", null, a).status());
+		assertEquals(200, call("PUT", "/api/settings", settingsJson("", "1.2.3.4"), a).status());
+	}
+
+	@Test
+	void putSettingsKeepsAbsentFieldsAndEmptyStringClears() throws Exception
+	{
+		Client c = loggedInReady();
+		JsonObject full = new JsonObject();
+		full.addProperty("radarrApiKey", "radarr-key");
+		full.addProperty("tautulliApiKey", "tautulli-key");
+		full.addProperty("queueMessageId", "123");
+		full.addProperty("plexIp", "1.1.1.1");
+		assertEquals(200, call("PUT", "/api/settings", full.toString(), c).status());
+		assertEquals(200, call("PUT", "/api/settings", "{\"plexIp\":\"2.2.2.2\"}", c).status());
+		assertEquals("2.2.2.2", settings.fileValues().plexIp());
+		assertEquals("radarr-key", settings.fileValues().radarrApiKey());
+		assertEquals("tautulli-key", settings.fileValues().tautulliApiKey());
+		assertEquals("123", settings.fileValues().queueMessageId());
+		assertEquals(200, call("PUT", "/api/settings", "{\"radarrApiKey\":\"\"}", c).status());
+		assertEquals("", settings.fileValues().radarrApiKey());
+		assertEquals("tautulli-key", settings.fileValues().tautulliApiKey());
+		assertEquals(400, call("PUT", "/api/settings", "[1]", c).status());
 	}
 
 	private String rawGet(String target) throws IOException
