@@ -168,4 +168,24 @@ class SettingsStoreTest
 		assertEquals(before, store.fileValues());
 		assertEquals(effectiveBefore, store.effective());
 	}
+
+	@Test
+	void normalisedHostsStripsSchemeSlashesAndWhitespace()
+	{
+		Settings in = new Settings("tok", "  HTTPS://1.2.3.4/ ", "32400", "ptok", "http://t:8181//", "tkey",
+				" http://r:7878/ ", "rkey", "", "skey", "", "", "", "", "", "", "");
+		Settings out = in.normalisedHosts();
+		assertEquals("1.2.3.4", out.plexIp());
+		assertEquals("t:8181", out.tautulliUrl());
+		assertEquals("r:7878", out.radarrUrl());
+		assertEquals("", out.sonarrUrl());
+		assertEquals("tok", out.botToken());
+		assertEquals("ptok", out.plexToken());
+		assertEquals("tkey", out.tautulliApiKey());
+		assertEquals("rkey", out.radarrApiKey());
+		assertEquals("skey", out.sonarrApiKey());
+		assertEquals("32400", out.plexPort());
+		assertEquals("host:1", with(Settings.empty(), "", "host:1", "").normalisedHosts().plexIp());
+		assertEquals("", Settings.empty().normalisedHosts().plexIp());
+	}
 }

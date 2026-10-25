@@ -12,23 +12,23 @@
                { key: 'plexPort', label: 'Plex port', inputmode: 'numeric' },
                { key: 'plexToken', label: 'Plex token', secret: true }] },
     { id: 'tautulli', title: 'Tautulli', optional: true,
-      help: 'Full URL including port, for example http://192.168.1.10:8181. The API key is under Settings, Web Interface.',
-      fields: [{ key: 'tautulliUrl', label: 'Tautulli URL' },
+      help: 'Enter host:port without http://, for example 192.168.1.10:8181. The API key is under Settings, Web Interface.',
+      fields: [{ key: 'tautulliUrl', label: 'Tautulli host:port' },
                { key: 'tautulliApiKey', label: 'Tautulli API key', secret: true }] },
     { id: 'radarr', title: 'Radarr', optional: true,
-      help: 'Full URL including port, for example http://192.168.1.10:7878. The API key is under Settings, General.',
-      fields: [{ key: 'radarrUrl', label: 'Radarr URL' },
+      help: 'Enter host:port without http://, for example 192.168.1.10:7878. The API key is under Settings, General.',
+      fields: [{ key: 'radarrUrl', label: 'Radarr host:port' },
                { key: 'radarrApiKey', label: 'Radarr API key', secret: true }] },
     { id: 'sonarr', title: 'Sonarr', optional: true,
-      help: 'Full URL including port, for example http://192.168.1.10:8989. The API key is under Settings, General.',
-      fields: [{ key: 'sonarrUrl', label: 'Sonarr URL' },
+      help: 'Enter host:port without http://, for example 192.168.1.10:8989. The API key is under Settings, General.',
+      fields: [{ key: 'sonarrUrl', label: 'Sonarr host:port' },
                { key: 'sonarrApiKey', label: 'Sonarr API key', secret: true }] }
   ];
   var STATE_LABELS = { NOT_CONFIGURED: 'not configured', STARTING: 'starting', RUNNING: 'running', FAILED: 'failed' };
 
   var csrf = '';
   var initial = {};
-  var pollTimer = null;
+  var pollGen = 0;
 
   function $(id) { return document.getElementById(id); }
 
@@ -48,7 +48,8 @@
   }
 
   function stopPolling() {
-    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+    pollGen++;
+    // The pending timer is left to fire: it sees the generation changed and resolves, so Save re-enables.
   }
 
   // Resolves {status, data}. 401 outside login returns to the login screen.
@@ -80,6 +81,8 @@
     stopPolling();
     csrf = '';
     initial = {};
+    $('save').disabled = false;
+    $('logout').disabled = false;
     $('login-password').value = '';
     show('login-view');
   }
@@ -241,16 +244,16 @@
         setResult(out, null, 'Saved. Starting the bot...');
         return api('GET', '/api/settings').then(function (s) {
           if (s.status === 200) { fillSettings(s.data); }
-          return pollStatus(out, Date.now());
+          return pollStatus(out, Date.now(), pollGen);
         });
       })
       .catch(function () { setResult(out, false, 'Could not reach the server'); })
       .then(function () { btn.disabled = false; });
   });
 
-  function pollStatus(out, startedAt) {
+  function pollStatus(out, startedAt, gen) {
     return api('GET', '/api/status').then(function (r) {
-      if (r.status !== 200) { return; }
+      if (gen !== pollGen || r.status !== 200) { return; }
       renderStatus(r.data);
       if (r.data.botState !== 'STARTING') {
         var ok = r.data.botState === 'RUNNING';
@@ -264,7 +267,9 @@
         return;
       }
       return new Promise(function (resolve) {
-        pollTimer = setTimeout(function () { pollTimer = null; resolve(pollStatus(out, startedAt)); }, 2000);
+        setTimeout(function () {
+          resolve(gen === pollGen ? pollStatus(out, startedAt, gen) : undefined);
+        }, 2000);
       });
     });
   }

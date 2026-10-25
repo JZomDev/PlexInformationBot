@@ -451,6 +451,15 @@ class WebServerTest
 	}
 
 	@Test
+	void putSettingsNormalisesHostFields() throws Exception
+	{
+		Client c = loggedInReady();
+		assertEquals(200, call("PUT", "/api/settings", "{\"radarrUrl\":\"http://192.168.1.10:7878/\"}", c).status());
+		assertEquals("192.168.1.10:7878", settings.fileValues().radarrUrl());
+		assertTrue(call("GET", "/api/settings", null, c).body().contains("\"radarrUrl\":\"192.168.1.10:7878\""));
+	}
+
+	@Test
 	void putSettingsKeepsAbsentFieldsAndEmptyStringClears() throws Exception
 	{
 		Client c = loggedInReady();

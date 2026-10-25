@@ -97,4 +97,32 @@ public record Settings(String botToken, String plexIp, String plexPort, String p
 				s.roleId, s.roleChannelId, s.roleMessageId, s.statusChannelId, s.statusMessageId,
 				s.queueChannelId, s.queueMessageId);
 	}
+
+	private static String host(String value)
+	{
+		String v = value.strip();
+		if (v.regionMatches(true, 0, "http://", 0, 7))
+		{
+			v = v.substring(7);
+		}
+		else if (v.regionMatches(true, 0, "https://", 0, 8))
+		{
+			v = v.substring(8);
+		}
+		v = v.strip();
+		int end = v.length();
+		while (end > 0 && v.charAt(end - 1) == '/')
+		{
+			end--;
+		}
+		return v.substring(0, end).strip();
+	}
+
+	/** Host fields are stored as host:port; the runtime adds the scheme itself. Secrets are untouched. */
+	public Settings normalisedHosts()
+	{
+		return new Settings(botToken, host(plexIp), plexPort, plexToken, host(tautulliUrl), tautulliApiKey,
+				host(radarrUrl), radarrApiKey, host(sonarrUrl), sonarrApiKey, roleId, roleChannelId,
+				roleMessageId, statusChannelId, statusMessageId, queueChannelId, queueMessageId);
+	}
 }

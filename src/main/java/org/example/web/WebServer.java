@@ -388,7 +388,7 @@ public class WebServer
 		{
 			try
 			{
-				settings.update(saved -> saved.applyForm(withAbsentKept(form, saved)));
+				settings.update(saved -> saved.applyForm(withAbsentKept(form, saved)).normalisedHosts());
 			}
 			catch (IOException e)
 			{
