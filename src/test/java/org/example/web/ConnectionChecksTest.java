@@ -164,4 +164,27 @@ class ConnectionChecksTest
 		assertEquals("Logged in as Bot", r.message());
 		assertEquals(1, calls.get());
 	}
+
+	@Test
+	void plexMessageMasksSecretEchoedByRemote()
+	{
+		reply = "{\"MediaContainer\":{\"friendlyName\":\"srv-" + SECRET + "\"}}";
+		CheckResult r = checks.plex("127.0.0.1", String.valueOf(fake.getAddress().getPort()), SECRET);
+		assertTrue(r.ok(), r.message());
+		assertTrue(r.message().contains("srv-"));
+		assertFalse(r.message().contains(SECRET), r.message());
+	}
+
+	@Test
+	void arrAndTautulliMessagesIgnoreRemoteBodyEchoingKey()
+	{
+		reply = "{\"error\":\"bad key " + SECRET + "\",\"response\":{\"result\":\"error\",\"message\":\"" + SECRET + "\"}}";
+		status = 500;
+		assertFalse(checks.radarr(hostPort, SECRET).message().contains(SECRET));
+		assertFalse(checks.sonarr(hostPort, SECRET).message().contains(SECRET));
+		status = 200;
+		CheckResult t = checks.tautulli(hostPort, SECRET);
+		assertFalse(t.ok());
+		assertFalse(t.message().contains(SECRET));
+	}
 }

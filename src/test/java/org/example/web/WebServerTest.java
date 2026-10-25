@@ -106,6 +106,7 @@ class WebServerTest
 	private CredentialStore credentials;
 	private FakeBot bot;
 	private FakeChecks checks;
+	private ConnectionChecks checksOverride;
 	private WebServer server;
 	private HttpClient http;
 	private Path configDir;
@@ -128,7 +129,8 @@ class WebServerTest
 		bot = new FakeBot();
 		checks = new FakeChecks();
 		MutableClock clock = new MutableClock();
-		server = new WebServer(0, settings, credentials, new SessionManager(clock), new LoginThrottle(clock), checks, bot);
+		server = new WebServer(0, settings, credentials, new SessionManager(clock), new LoginThrottle(clock),
+				checksOverride != null ? checksOverride : checks, bot);
 		server.start();
 		http = HttpClient.newHttpClient();
 	}
@@ -538,5 +540,35 @@ class WebServerTest
 		Client c = login("admin", "admin");
 		assertEquals(403, call("POST", "/api/test/plex", "{}", c).status());
 		assertTrue(checks.calls.isEmpty());
+	}
+
+	@Test
+	void testRouteResponseNeverContainsSavedSecret() throws Exception
+	{
+		com.sun.net.httpserver.HttpServer fake = com.sun.net.httpserver.HttpServer.create(
+				new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+		fake.createContext("/", ex ->
+		{
+			byte[] b = "{\"MediaContainer\":{\"friendlyName\":\"srv-SECRET123\"}}".getBytes(StandardCharsets.UTF_8);
+			ex.sendResponseHeaders(200, b.length);
+			ex.getResponseBody().write(b);
+			ex.close();
+		});
+		fake.start();
+		try
+		{
+			checksOverride = new ConnectionChecks(HttpClient.newHttpClient(), t -> new CheckResult(true, "x"));
+			start(new SettingsStore(configDir, Map.of("PLEX_KEY", "SECRET123")));
+			Client c = loggedInReady();
+			Res r = call("POST", "/api/test/plex", "{\"plexIp\":\"127.0.0.1\",\"plexPort\":\""
+					+ fake.getAddress().getPort() + "\",\"plexToken\":\"********\"}", c);
+			assertEquals(200, r.status(), r.body());
+			assertTrue(r.json().get("ok").getAsBoolean(), r.body());
+			assertFalse(r.body().contains("SECRET123"), r.body());
+		}
+		finally
+		{
+			fake.stop(0);
+		}
 	}
 }
