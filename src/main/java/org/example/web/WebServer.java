@@ -521,11 +521,11 @@ public class WebServer
 
 	private static final CheckResult PROBE_FAILED = new CheckResult(false, "Could not check the message");
 
-	/** The typed value, or the saved one when nothing was typed. Whitespace around it is ignored. */
+	/** The typed value, or the saved one when the key is absent (a present blank stays blank). Whitespace around it is ignored. */
 	private static String typedOrSaved(JsonObject in, String key, String saved)
 	{
 		String v = str(in, key);
-		return (v == null || v.isBlank() ? saved : v).strip();
+		return (v == null ? saved : v).strip();
 	}
 
 	private CheckResult messageTest(JsonObject in, Settings e, String kind)

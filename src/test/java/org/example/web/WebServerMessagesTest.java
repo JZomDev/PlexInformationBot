@@ -241,15 +241,25 @@ class WebServerMessagesTest
 	}
 
 	@Test
-	void emptyTypedValueFallsBackToTheSavedValue() throws Exception
+	void absentKeyFallsBackToTheSavedValue() throws Exception
 	{
 		start(Map.of("TEXT_CHANNELID", C1, "MESSAGEID", M1));
 		ready();
-		call("POST", "/api/test/status", ids("statusChannelId", "", "statusMessageId", ""));
 		call("POST", "/api/test/status", "{}");
-		assertEquals(List.of("message|" + C1 + "|" + M1, "message|" + C1 + "|" + M1), probe.calls);
+		assertEquals(List.of("message|" + C1 + "|" + M1), probe.calls);
 		call("POST", "/api/test/status", ids("statusMessageId", "  999999999999999999  "));
-		assertEquals("message|" + C1 + "|999999999999999999", probe.calls.get(2));
+		assertEquals("message|" + C1 + "|999999999999999999", probe.calls.get(1));
+	}
+
+	@Test
+	void presentBlankValueIsNotReplacedByTheSavedValue() throws Exception
+	{
+		start(Map.of("TEXT_CHANNELID", C1, "MESSAGEID", M1));
+		ready();
+		Res r = call("POST", "/api/test/status", ids("statusChannelId", "", "statusMessageId", ""));
+		assertFalse(r.json().get("ok").getAsBoolean());
+		assertEquals("Enter the channel ID and the message ID first", r.json().get("message").getAsString());
+		assertTrue(probe.calls.isEmpty());
 	}
 
 	@Test
