@@ -76,7 +76,51 @@
     return e;
   }
 
+  // ---- reveal (eye) button on password-type fields ----
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  function eyeIcon(off) {
+    var svg = document.createElementNS(SVG_NS, 'svg');
+    [['viewBox', '0 0 24 24'], ['width', '22'], ['height', '22'], ['fill', 'none'], ['stroke', 'currentColor'],
+     ['stroke-width', '2'], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round'], ['aria-hidden', 'true'],
+     ['focusable', 'false']].forEach(function (a) { svg.setAttribute(a[0], a[1]); });
+    var paths = ['M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z'];
+    if (off) { paths.push('M3 3l18 18'); }
+    var shapes = paths.map(function (d) { var p = document.createElementNS(SVG_NS, 'path'); p.setAttribute('d', d); return p; });
+    if (!off) {
+      var c = document.createElementNS(SVG_NS, 'circle');
+      c.setAttribute('cx', '12'); c.setAttribute('cy', '12'); c.setAttribute('r', '3');
+      shapes.push(c);
+    }
+    shapes.forEach(function (n) { svg.appendChild(n); });
+    return svg;
+  }
+
+  function setRevealed(input, btn, on) {
+    input.type = on ? 'text' : 'password';
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.setAttribute('aria-label', on ? 'Hide value' : 'Show value');
+    while (btn.firstChild) { btn.removeChild(btn.firstChild); }
+    btn.appendChild(eyeIcon(on));
+  }
+
+  function addReveal(input) {
+    var wrap = el('div', { 'class': 'pw-wrap' });
+    var btn = el('button', { type: 'button', 'class': 'reveal' });
+    input.parentNode.replaceChild(wrap, input);
+    wrap.appendChild(input);
+    wrap.appendChild(btn);
+    setRevealed(input, btn, false);
+    btn.addEventListener('click', function () { setRevealed(input, btn, input.type === 'password'); });
+  }
+
+  function hideAllReveals() {
+    Array.prototype.forEach.call(document.querySelectorAll('.pw-wrap'), function (w) {
+      setRevealed(w.querySelector('input'), w.querySelector('button.reveal'), false);
+    });
+  }
+
   function show(view) {
+    hideAllReveals();
     ['loading', 'login-view', 'change-view', 'main-view'].forEach(function (v) {
       $(v).hidden = (v !== view);
     });
@@ -216,7 +260,9 @@
         var attrs = { id: 'f-' + f.key, name: f.key, type: f.secret ? 'password' : 'text',
                       autocomplete: f.secret ? 'new-password' : 'off', autocapitalize: 'off', spellcheck: 'false' };
         if (f.inputmode) { attrs.inputmode = f.inputmode; }
-        card.appendChild(el('input', attrs));
+        var inp = el('input', attrs);
+        card.appendChild(inp);
+        if (f.secret) { addReveal(inp); }
       });
       var btn = el('button', { id: 'test-' + s.id, type: 'button', text: 'Test' });
       var res = el('p', { id: 'result-' + s.id, 'class': 'result', 'aria-live': 'polite' });
@@ -339,6 +385,7 @@
 
   function fillSettings(data) {
     initial = {};
+    hideAllReveals();
     allFields().forEach(function (f) {
       var v = data[f.key] == null ? '' : String(data[f.key]);
       initial[f.key] = v;
@@ -529,5 +576,6 @@
     });
   });
 
+  ['login-password', 'change-password', 'change-repeat'].forEach(function (id) { addReveal($(id)); });
   init();
 })();
