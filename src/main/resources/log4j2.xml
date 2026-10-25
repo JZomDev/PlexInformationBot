@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Configuration name="Plex Info Bot" status="INFO" strict="true">
 	<Properties>
-		<Property name="LOG_DIR">/var/log</Property>
+		<Property name="LOG_DIR">${env:CONFIG_DIR:-/config}/logs</Property>
 	</Properties>
 
 	<Appenders>
@@ -15,19 +15,20 @@
 		</Console>
 		<RollingFile
 				name="File Appender"
-				fileName="${LOG_DIR}/plexinfobot.log"
-				filePattern="${LOG_DIR}/plexinfobot.%d{dd-MMM-yyyy}.log"
+				fileName="${LOG_DIR}/bot.log"
+				filePattern="${LOG_DIR}/bot.%i.log"
+				filePermissions="rw-------"
 				ignoreExceptions="false">
 			<PatternLayout>
-				<Pattern>%d{yyyy-MM-dd HH:mm:ss} %-5p %m%n</Pattern>
+				<Pattern><![CDATA[%d{yyyy-MM-dd HH:mm:ss} %-5p %replace{%m}{(?i)((?:token|api_?key)=)[^\s&]+}{$1****}%n]]></Pattern>
 			</PatternLayout>
 			<Filters>
 				<ThresholdFilter level="INFO"/>
 			</Filters>
 			<Policies>
-				<TimeBasedTriggeringPolicy interval="1"/>
+				<SizeBasedTriggeringPolicy size="2MB"/>
 			</Policies>
-			<DefaultRolloverStrategy max="5" />
+			<DefaultRolloverStrategy max="3" fileIndex="min"/>
 		</RollingFile>
 	</Appenders>
 	<Loggers>
