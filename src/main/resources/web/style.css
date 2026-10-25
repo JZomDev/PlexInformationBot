@@ -53,3 +53,5 @@ h3 { font-size: 1.05rem; margin: 0 0 4px; }
 .footer { color: var(--muted); font-size: .9rem; margin-top: 16px; }
 .opt { font-weight: 400; color: var(--muted); }
 @media (min-width: 600px) { #save { width: auto; } }
+.strip a { color: var(--accent); display: inline-flex; align-items: center; min-height: 44px; white-space: nowrap; }
+.group.flash { background: var(--warn-bg); border-radius: 6px; outline: 2px solid var(--focus); }

@@ -199,11 +199,11 @@
   }
 
   function buildMessagesCard() {
-    var card = el('section', { 'class': 'card', 'aria-labelledby': 'h-messages' });
+    var card = el('section', { id: 'messages', 'class': 'card', 'aria-labelledby': 'h-messages' });
     card.appendChild(el('h2', { id: 'h-messages', text: 'Discord messages (optional)' }));
     card.appendChild(el('p', { 'class': 'help', text: MESSAGE_INTRO }));
     MESSAGE_GROUPS.forEach(function (g) {
-      var box = el('div', { 'class': 'group', role: 'group', 'aria-labelledby': 'h-' + g.id });
+      var box = el('div', { id: 'messages-' + g.id, 'class': 'group', role: 'group', 'aria-labelledby': 'h-' + g.id });
       box.appendChild(el('h3', { id: 'h-' + g.id, text: g.title }));
       box.appendChild(el('p', { 'class': 'help', text: g.help }));
       box.appendChild(el('label', { 'for': 'link-' + g.id, text: 'Paste message link' }));
@@ -227,6 +227,24 @@
     });
     return card;
   }
+
+  // Status line links: scroll to the group, focus its first field and highlight it briefly.
+  function goToGroup(id) {
+    var box = $('messages-' + id);
+    var g = MESSAGE_GROUPS.filter(function (x) { return x.id === id; })[0];
+    if (!box || !g) { return; }
+    box.scrollIntoView({ block: 'start' });
+    $('f-' + g.fields[0].key).focus();
+    box.classList.add('flash');
+    setTimeout(function () { box.classList.remove('flash'); }, 1800);
+  }
+
+  ['status', 'queue', 'role'].forEach(function (id) {
+    $(id + '-set').addEventListener('click', function (ev) {
+      ev.preventDefault();
+      goToGroup(id);
+    });
+  });
 
   // Fills the group's channel and message IDs from a pasted message link. Digits only, text only.
   function applyLink(g, link, err) {
