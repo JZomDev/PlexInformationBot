@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
@@ -70,10 +69,7 @@ public class SettingsStore
 
 	public synchronized void save(Settings values) throws IOException
 	{
-		Files.createDirectories(dir);
-		Path tmp = dir.resolve(FILE_NAME + ".tmp");
-		Files.writeString(tmp, GSON.toJson(values), StandardCharsets.UTF_8);
-		Files.move(tmp, dir.resolve(FILE_NAME), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+		OwnerOnlyFiles.writeAtomically(dir.resolve(FILE_NAME), GSON.toJson(values));
 		this.fileValues = values;
 		this.current = envSettings.overlay(values);
 	}

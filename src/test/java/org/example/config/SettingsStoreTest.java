@@ -1,11 +1,14 @@
 package org.example.config;
 
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
+import java.util.Set;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -187,5 +190,26 @@ class SettingsStoreTest
 		assertEquals("32400", out.plexPort());
 		assertEquals("host:1", with(Settings.empty(), "", "host:1", "").normalisedHosts().plexIp());
 		assertEquals("", Settings.empty().normalisedHosts().plexIp());
+	}
+
+	@Test
+	void settingsAndCredentialsFilesAreOwnerOnly() throws IOException
+	{
+		Assumptions.assumeTrue(tmp.getFileSystem().supportedFileAttributeViews().contains("posix"));
+		new SettingsStore(tmp, Map.of()).save(Settings.empty());
+		new org.example.web.CredentialStore(tmp).change("jordan", "correct horse");
+		Set<PosixFilePermission> ownerOnly = Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE);
+		assertEquals(ownerOnly, Files.getPosixFilePermissions(tmp.resolve("settings.json")));
+		assertEquals(ownerOnly, Files.getPosixFilePermissions(tmp.resolve("credentials.json")));
+	}
+
+	@Test
+	void failedMoveLeavesNoTmpFile() throws IOException
+	{
+		Path blocker = Files.createDirectories(tmp.resolve("settings.json"));
+		Files.writeString(blocker.resolve("child"), "x");
+		SettingsStore store = new SettingsStore(tmp, Map.of());
+		assertThrows(IOException.class, () -> store.save(Settings.empty()));
+		assertFalse(Files.exists(tmp.resolve("settings.json.tmp")));
 	}
 }

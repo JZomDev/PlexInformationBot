@@ -1,6 +1,7 @@
 package org.example.web;
 
 import com.google.gson.Gson;
+import org.example.config.OwnerOnlyFiles;
 
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
@@ -8,15 +9,11 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.attribute.PosixFilePermission;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.Set;
 
 public class CredentialStore
 {
@@ -97,39 +94,7 @@ public class CredentialStore
 		Stored stored = new Stored(username, Base64.getEncoder().encodeToString(salt),
 				Base64.getEncoder().encodeToString(hash), ITERATIONS);
 
-		Files.createDirectories(dir);
-		Path tmp = dir.resolve(FILE_NAME + ".tmp");
-		try
-		{
-			Files.deleteIfExists(tmp);
-			createOwnerOnly(tmp);
-			Files.writeString(tmp, GSON.toJson(stored), StandardCharsets.UTF_8);
-			Files.move(tmp, dir.resolve(FILE_NAME), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-		}
-		catch (IOException | RuntimeException e)
-		{
-			try
-			{
-				Files.deleteIfExists(tmp);
-			}
-			catch (IOException ignored)
-			{
-			}
-			throw e;
-		}
-	}
-
-	private static void createOwnerOnly(Path file) throws IOException
-	{
-		Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rw-------");
-		try
-		{
-			Files.createFile(file, PosixFilePermissions.asFileAttribute(perms));
-		}
-		catch (UnsupportedOperationException e)
-		{
-			Files.createFile(file);
-		}
+		OwnerOnlyFiles.writeAtomically(dir.resolve(FILE_NAME), GSON.toJson(stored));
 	}
 
 	private Stored read()
