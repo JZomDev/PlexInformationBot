@@ -709,4 +709,14 @@ class WebServerTest
 			stub.server.stop(0);
 		}
 	}
+
+	@Test
+	void failureLineHasClassAndFolderButNeverTheMessage()
+	{
+		String line = WebServer.failureLine("Could not save settings",
+				new IOException("secret-token-123 /etc/passwd"), Path.of("/config"));
+		assertTrue(line.contains("java.io.IOException"), line);
+		assertTrue(line.contains("/config"), line);
+		assertFalse(line.contains("secret-token-123"), line);
+	}
 }

@@ -4,6 +4,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.example.bot.BotController;
 import org.example.config.Settings;
 import org.example.config.SettingsStore;
@@ -22,6 +24,7 @@ import java.util.concurrent.Executors;
 
 public class WebServer
 {
+	private static final Logger logger = LogManager.getLogger(WebServer.class);
 	private static final String COOKIE = "sid";
 	private static final String TEST_PREFIX = "/api/test/";
 	private static final List<String> TEST_SECTIONS = List.of("discord", "plex", "tautulli", "radarr", "sonarr");
@@ -91,6 +94,17 @@ public class WebServer
 		return server.getAddress().getPort();
 	}
 
+	/** Only the exception class and the config folder: the message may carry values the user submitted. */
+	static String failureLine(String what, Throwable e, java.nio.file.Path configDir)
+	{
+		return what + ": " + e.getClass().getName() + " (config folder " + configDir + ")";
+	}
+
+	private void logFailure(String what, Throwable e)
+	{
+		logger.error(failureLine(what, e, settings.dir()));
+	}
+
 	private void dispatch(HttpExchange ex) throws IOException
 	{
 		try
@@ -115,6 +129,7 @@ public class WebServer
 		catch (Exception e)
 		{
 			// never echo the exception: it may carry paths or submitted values
+			logFailure("Request failed", e);
 			try
 			{
 				HttpIo.sendError(ex, 500, "Internal error");
@@ -392,6 +407,7 @@ public class WebServer
 			}
 			catch (IOException e)
 			{
+				logFailure("Could not save settings", e);
 				HttpIo.sendError(ex, 500, "Could not save settings");
 				return;
 			}
@@ -401,6 +417,7 @@ public class WebServer
 			}
 			catch (RuntimeException e)
 			{
+				logFailure("Could not restart the bot", e);
 				HttpIo.sendError(ex, 500, "Settings saved, but the bot could not be restarted");
 				return;
 			}

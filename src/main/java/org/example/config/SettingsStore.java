@@ -52,6 +52,11 @@ public class SettingsStore
 		this.current = envSettings.overlay(loaded);
 	}
 
+	public Path dir()
+	{
+		return dir;
+	}
+
 	public Settings effective()
 	{
 		return current;
