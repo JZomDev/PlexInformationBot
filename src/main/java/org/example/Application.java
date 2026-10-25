@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -33,6 +34,7 @@ import org.example.bot.BotController;
 import org.example.bot.BotLifecycle;
 import org.example.bot.BotState;
 import org.example.bot.LoginWait;
+import org.example.bot.RegistrationTracker;
 import org.example.bot.SessionCache;
 import org.example.config.AppConfig;
 import org.example.config.SettingsStore;
@@ -88,13 +90,38 @@ public class Application implements BotController
 		this.settingsStore = store;
 	}
 
-	private void registerSetupCommands(DiscordApi api, Server server)
+	/**
+	 * Registers the setup commands for one server, at most once per connection. Javacord needs the cached
+	 * application info for this and it may not be there yet when a server becomes available early in startup,
+	 * so it is requested first. Every failure, synchronous or not, is logged without its message.
+	 */
+	private void registerSetupCommands(DiscordApi api, Server server, RegistrationTracker registered)
 	{
-		api.bulkOverwriteServerApplicationCommands(server, new SlashCommandsSetUp().getSetupCommands())
-			.exceptionally(e -> {
-				logger.warn("Could not register setup commands for a server: {}", e.getClass().getSimpleName());
-				return null;
-			});
+		long id = server.getId();
+		if (!registered.claim(id))
+		{
+			return;
+		}
+		try
+		{
+			api.requestApplicationInfo()
+				.thenCompose(info -> api.bulkOverwriteServerApplicationCommands(server, new SlashCommandsSetUp().getSetupCommands()))
+				.whenComplete((commands, e) -> {
+					if (e == null)
+					{
+						logger.info("Registered setup commands for server {}", server.getName());
+						return;
+					}
+					registered.release(id);
+					Throwable cause = e instanceof CompletionException && e.getCause() != null ? e.getCause() : e;
+					logger.warn("Could not register setup commands for a server: {}", cause.getClass().getSimpleName());
+				});
+		}
+		catch (Throwable e)
+		{
+			registered.release(id);
+			logger.warn("Could not register setup commands for a server: {}", e.getClass().getSimpleName());
+		}
 	}
 
 	@Override
@@ -129,6 +156,8 @@ public class Application implements BotController
 
 		SlashCommandsSetUp slashCommandsSetUp = new SlashCommandsSetUp();
 
+		// one per connection: a restart builds a new one so every server is registered again
+		RegistrationTracker registered = new RegistrationTracker();
 		DiscordApiBuilder builder = new DiscordApiBuilder();
 		builder.setAllIntents();
 		builder.setToken(settings.botToken());
@@ -136,8 +165,8 @@ public class Application implements BotController
 		builder.setWaitForServersOnStartup(false);
 		builder.setWaitForUsersOnStartup(false);
 		builder.addServerBecomesAvailableListener(new ServerBecomesAvailable());
-		builder.addServerBecomesAvailableListener((ServerBecomesAvailableEvent e) -> registerSetupCommands(e.getApi(), e.getServer()));
-		builder.addServerJoinListener((ServerJoinEvent e) -> registerSetupCommands(e.getApi(), e.getServer()));
+		builder.addServerBecomesAvailableListener((ServerBecomesAvailableEvent e) -> registerSetupCommands(e.getApi(), e.getServer(), registered));
+		builder.addServerJoinListener((ServerJoinEvent e) -> registerSetupCommands(e.getApi(), e.getServer(), registered));
 		builder.addListener(new ReactListener());
 		builder.addListener(new MessageListener());
 		builder.addListener(new RoleListener(this::getServer));
@@ -157,7 +186,7 @@ public class Application implements BotController
 			}
 			for (Server joined : api.getServers())
 			{
-				registerSetupCommands(api, joined);
+				registerSetupCommands(api, joined, registered);
 			}
 			service = launchScheduledExecutor(api);
 			liveApi = api;
