@@ -1,8 +1,21 @@
 package org.example;
 
-import java.util.Map;
+import java.net.http.HttpClient;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.logging.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.example.config.AppConfig;
+import org.example.config.Settings;
+import org.example.config.SettingsStore;
+import org.example.web.ConnectionChecks;
+import org.example.web.CredentialStore;
+import org.example.web.JavacordDiscordProbe;
+import org.example.web.LoginThrottle;
+import org.example.web.SessionManager;
+import org.example.web.WebServer;
 
 public class Main
 {
@@ -10,118 +23,90 @@ public class Main
 
 	public static final String DISCORD_MESSAGE = "React to this message to get your roles!";
 	private static final String CURRENT_VERSION = "3.1.1";
-	public static String DISCORD_TOKEN = "";
-	public static String IP = "";
-	public static String PORT = "";
-	public static String PLEX_KEY = "";
-	public static String ROLE_ID = "";
-	public static String TEXT_CHANNELID = "";
-	public static String QUEUE_TEXT_CHANNELID = "";
-	public static String MESSAGEID = "";
-	public static String QUEUEMESSAGEID = "";
-	public static String API_KEY = "";
-	public static String TAUTULLI_URL = "";
-	public static String SONARR_URL = "";
-	public static String SONARR_API = "";
-	public static String RADARR_URL = "";
-	public static String RADARR_API = "";
+	private static final int DEFAULT_WEB_PORT = 4546;
+	private static final String DEFAULT_CONFIG_DIR = "/config";
 
-	static
+	// Held strongly so java.util.logging cannot garbage collect the logger and drop its level.
+	private static final java.util.logging.Logger JAVAPLEX_LOGGER = java.util.logging.Logger.getLogger("kekolab.javaplex");
+
+	/**
+	 * The javaplex library logs every Plex request URL, including the Plex token, at INFO.
+	 */
+	static void configureLogging()
 	{
-		String discord_tokenEnv = System.getenv("BOT_TOKEN");
-		if (discord_tokenEnv != null)
-		{
-			DISCORD_TOKEN = discord_tokenEnv;
-		}
-		String ipEnv = System.getenv("IP");
-		if (ipEnv != null)
-		{
-			IP = ipEnv;
-		}
-		String portEnv = System.getenv("PORT");
-		if (portEnv != null)
-		{
-			PORT = portEnv;
-		}
-		String plex_keyEnv = System.getenv("PLEX_KEY");
-		if (plex_keyEnv != null)
-		{
-			PLEX_KEY = plex_keyEnv;
-		}
-		String role_idEnv = System.getenv("ROLE_ID");
-		if (role_idEnv != null)
-		{
-			ROLE_ID = role_idEnv;
-		}
-		String text_channelidEnv = System.getenv("TEXT_CHANNELID");
-		if (text_channelidEnv != null)
-		{
-			TEXT_CHANNELID = text_channelidEnv;
-		}
-		String queue_text_channelidEnv = System.getenv("QUEUE_TEXT_CHANNELID");
-		if (queue_text_channelidEnv != null)
-		{
-			QUEUE_TEXT_CHANNELID = queue_text_channelidEnv;
-		}
-		String messageidEnv = System.getenv("MESSAGEID");
-		if (messageidEnv != null)
-		{
-			MESSAGEID = messageidEnv;
-		}
-		String queuemessageidEnv = System.getenv("QUEUEMESSAGEID");
-		if (queuemessageidEnv != null)
-		{
-			QUEUEMESSAGEID = queuemessageidEnv;
-		}
-		String api_keyEnv = System.getenv("API_KEY");
-		if (api_keyEnv != null)
-		{
-			API_KEY = api_keyEnv;
-		}
-		String tautulli_urlEnv = System.getenv("TAUTULLI_URL");
-		if (tautulli_urlEnv != null)
-		{
-			TAUTULLI_URL = tautulli_urlEnv;
-		}
-		String sonarr_urlEnv = System.getenv("SONARR_URL");
-		if (sonarr_urlEnv != null)
-		{
-			SONARR_URL = sonarr_urlEnv;
-		}
-		String sonarr_apiEnv = System.getenv("SONARR_API");
-		if (sonarr_apiEnv != null)
-		{
-			SONARR_API = sonarr_apiEnv;
-		}
-		String radarr_urlEnv = System.getenv("RADARR_URL");
-		if (radarr_urlEnv != null)
-		{
-			RADARR_URL = radarr_urlEnv;
-		}
-		String radarr_apiEnv = System.getenv("RADARR_API");
-		if (radarr_apiEnv != null)
-		{
-			RADARR_API = radarr_apiEnv;
-		}
+		JAVAPLEX_LOGGER.setLevel(Level.WARNING);
+	}
+
+	/** A taken web port must not take down a bot that is already configured; with no token there is nothing to run. */
+	static boolean continueWithoutSetupPage(Settings effective)
+	{
+		return !effective.botToken().isEmpty();
 	}
 
 	/**
 	 * The entrance point of our program.
 	 *
-	 * @param args The arguments for the program. The first element should be the bot's token.
+	 * @param args Unused. Configuration comes from the setup page or environment variables.
 	 */
 	public static void main(String[] args)
 	{
-		if (DISCORD_TOKEN.isEmpty())
-		{
-			logger.error("Failed to start Discord bot. No Discord token supplied");
-			return;
-		}
-
+		configureLogging();
 		logger.info("The current version of the project is {}", CURRENT_VERSION);
 
-		Application application = new Application();
-		application.start();
+		int port = DEFAULT_WEB_PORT;
+		String portEnv = System.getenv("WEB_PORT");
+		if (portEnv != null && !portEnv.isBlank())
+		{
+			try
+			{
+				port = Integer.parseInt(portEnv.trim());
+			}
+			catch (NumberFormatException e)
+			{
+				logger.error("WEB_PORT is not a number, using {}", DEFAULT_WEB_PORT);
+			}
+		}
+		String dirEnv = System.getenv("CONFIG_DIR");
+		Path configDir = Path.of(dirEnv == null || dirEnv.isBlank() ? DEFAULT_CONFIG_DIR : dirEnv.trim());
 
+		SettingsStore settings = new SettingsStore(configDir, System.getenv());
+		settings.loadWarning().ifPresent(logger::warn);
+		AppConfig.init(settings);
+
+		HttpClient http = HttpClient.newBuilder()
+			.followRedirects(HttpClient.Redirect.NEVER)
+			.connectTimeout(Duration.ofSeconds(5))
+			.build();
+		Application application = new Application();
+		application.setSettingsStore(settings);
+		WebServer web = new WebServer(port, settings, new CredentialStore(configDir),
+			new SessionManager(Clock.systemUTC()), new LoginThrottle(Clock.systemUTC()),
+			new ConnectionChecks(http, new JavacordDiscordProbe()), application, application.messageProbe());
+		try
+		{
+			web.start();
+		}
+		catch (Exception e)
+		{
+			logger.error("Could not start the setup page on port {} ({}). Is the port already in use?", port,
+				e.getClass().getSimpleName());
+			if (!continueWithoutSetupPage(settings.effective()))
+			{
+				System.exit(1);
+				return;
+			}
+			logger.warn("Starting the bot without the setup page.");
+			application.restart(settings.effective());
+			return;
+		}
+		logger.info("Setup page is listening on port {}", port);
+
+		Settings effective = settings.effective();
+		if (effective.botToken().isEmpty())
+		{
+			logger.info("No Discord token yet. Open the setup page to configure the bot.");
+			return;
+		}
+		application.restart(effective);
 	}
 }

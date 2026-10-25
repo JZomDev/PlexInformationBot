@@ -31,8 +31,7 @@ import org.apache.logging.log4j.Logger;
 import org.javacord.api.DiscordApi;
 import org.javacord.api.entity.message.embed.EmbedBuilder;
 
-import static org.example.Main.API_KEY;
-import static org.example.Main.TAUTULLI_URL;
+import org.example.config.AppConfig;
 
 public class PlexInformationWorker
 {
@@ -204,7 +203,7 @@ public class PlexInformationWorker
 
 	private Map<String, String> getFriendlyNames()
 	{
-		if (TAUTULLI_URL.isEmpty())
+		if (AppConfig.get().tautulliUrl().isEmpty())
 		{
 			return Map.of();
 		}
@@ -214,7 +213,7 @@ public class PlexInformationWorker
 		}
 		catch (Exception e)
 		{
-			log.error(e);
+			log.error("Could not load Tautulli user names: {}", e.getClass().getSimpleName());
 			return Map.of();
 		}
 	}
@@ -223,8 +222,8 @@ public class PlexInformationWorker
 	{
 		HashMap<String, String> mappedUsers = new HashMap<>();
 
-		String apikey = API_KEY;
-		String tautulliURL = TAUTULLI_URL;
+		String apikey = AppConfig.get().tautulliApiKey();
+		String tautulliURL = AppConfig.get().tautulliUrl();
 
 		String urlStr = "http://" + tautulliURL + "/api/v2?apikey=" + apikey + "&cmd=get_activity";
 		URL url = new URL(urlStr);

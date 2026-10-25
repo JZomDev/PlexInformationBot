@@ -40,7 +40,7 @@ bin/
 
 ### Mac OS ###
 .DS_Store
-/.dockerignore
+/config/
 /log/*
 .idea/*
 

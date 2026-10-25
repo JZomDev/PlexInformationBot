@@ -1,0 +1,15 @@
+.env
+.env.*
+.git
+.gitignore
+.gradle
+build
+.superpowers
+.idea
+.vscode
+.DS_Store
+docs
+*.md
+log
+out
+/config/

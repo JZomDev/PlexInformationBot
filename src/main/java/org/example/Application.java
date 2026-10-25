@@ -19,9 +19,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -32,19 +30,22 @@ import kekolab.javaplex.PlexMediatag;
 import kekolab.javaplex.PlexStatus;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import static org.example.Main.DISCORD_TOKEN;
-import static org.example.Main.IP;
-import static org.example.Main.MESSAGEID;
-import static org.example.Main.QUEUEMESSAGEID;
-import static org.example.Main.QUEUE_TEXT_CHANNELID;
-import static org.example.Main.RADARR_API;
-import static org.example.Main.RADARR_URL;
-import static org.example.Main.SONARR_API;
-import static org.example.Main.SONARR_URL;
-import static org.example.Main.PLEX_KEY;
-import static org.example.Main.PORT;
-import static org.example.Main.ROLE_ID;
-import static org.example.Main.TEXT_CHANNELID;
+import org.example.bot.BotController;
+import org.example.bot.BotLifecycle;
+import org.example.bot.BotState;
+import org.example.bot.LoginWait;
+import org.example.bot.RegistrationTracker;
+import org.example.bot.SessionCache;
+import org.example.config.AppConfig;
+import org.example.config.SettingsStore;
+import org.example.listeners.SetupCommandsListener;
+import org.example.web.JavacordMessageProbe;
+import org.example.web.MessageProbe;
+import org.javacord.api.entity.server.Server;
+import org.javacord.api.event.server.ServerBecomesAvailableEvent;
+import org.javacord.api.event.server.ServerJoinEvent;
+import org.javacord.api.event.server.ServerLeaveEvent;
+import org.example.config.Settings;
 import org.example.listeners.MessageListener;
 import org.example.listeners.PlexListener;
 import org.example.listeners.ReactListener;
@@ -57,68 +58,191 @@ import org.javacord.api.DiscordApi;
 import org.javacord.api.DiscordApiBuilder;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.message.embed.EmbedBuilder;
 
-public class Application
+public class Application implements BotController
 {
 
 	private final Logger logger = LogManager.getLogger(Application.class);
 
-	DiscordApi discordApi = null;
-	private ScheduledExecutorService mService;
-	private PlexMediaServer plexMediaServer;
-	private PlexApi plexApi;
+	private final BotLifecycle lifecycle = new BotLifecycle(this::connect);
+	private volatile SettingsStore settingsStore;
+	private volatile PlexMediaServer plexMediaServer;
+	private volatile PlexApi plexApi;
+	private final AtomicBoolean plexReconnecting = new AtomicBoolean(false);
 	private static final long SESSION_CACHE_MS = 2000;
-	private String lastEmbedSignature = "";
-	private List<PlexMediatag<?>> cachedSessions;
-	private long cachedSessionsAt;
+	private static final long LOGIN_TIMEOUT_SECONDS = 60;
+	private volatile String lastEmbedSignature = "";
+	private final SessionCache<List<PlexMediatag<?>>> sessionCache =
+			new SessionCache<>(this::loadSessions, System::currentTimeMillis, SESSION_CACHE_MS);
 	private final AtomicBoolean queueEmbedTaskRunning = new AtomicBoolean(false);
 
+	/** The connected bot while a connection is open, else null. */
+	private volatile DiscordApi liveApi;
 
-	public Application()
+	/** Answers the setup page's message checks using the running bot. */
+	public MessageProbe messageProbe()
 	{
-		initApi();
+		return new JavacordMessageProbe(() -> liveApi);
+	}
+
+	/** Lets the setup slash commands save the message IDs they create. */
+	public void setSettingsStore(SettingsStore store)
+	{
+		this.settingsStore = store;
+	}
+
+	/**
+	 * Registers the setup commands for one server, at most once per connection. Javacord needs the cached
+	 * application info for this and it may not be there yet when a server becomes available early in startup,
+	 * so it is requested first. Every failure, synchronous or not, is logged without its message.
+	 */
+	private void registerSetupCommands(DiscordApi api, Server server, RegistrationTracker registered)
+	{
+		long id = server.getId();
+		if (!registered.claim(id))
+		{
+			return;
+		}
 		try
 		{
-			initPlexMediaServer();
+			api.requestApplicationInfo()
+				.thenCompose(info -> api.bulkOverwriteServerApplicationCommands(server, new SlashCommandsSetUp().getSetupCommands()))
+				.whenComplete((commands, e) -> {
+					if (e == null)
+					{
+						logger.info("Registered setup commands for server {}", server.getName());
+						return;
+					}
+					registered.release(id);
+					Throwable cause = e instanceof CompletionException && e.getCause() != null ? e.getCause() : e;
+					logger.warn("Could not register setup commands for a server: {}", cause.getClass().getSimpleName());
+				});
+		}
+		catch (Throwable e)
+		{
+			registered.release(id);
+			logger.warn("Could not register setup commands for a server: {}", e.getClass().getSimpleName());
+		}
+	}
+
+	@Override
+	public void restart(Settings effective)
+	{
+		AppConfig.reload();
+		lifecycle.restart(effective);
+	}
+
+	@Override
+	public BotState state()
+	{
+		return lifecycle.state();
+	}
+
+	/** Runs on the lifecycle thread: opens the one Discord connection and its scheduler. */
+	private BotLifecycle.Connection connect(Settings settings) throws Exception
+	{
+		clearSessions();
+		lastEmbedSignature = "";
+		queueEmbedTaskRunning.set(false);
+		initApi(settings);
+		try
+		{
+			initPlexMediaServer(settings);
 		}
 		catch (Exception e)
 		{
-			logger.error(e.getMessage(), e);
-			return;
+			plexMediaServer = null;
+			logger.error("Could not reach Plex yet, will retry: {}", e.getClass().getSimpleName());
 		}
 
 		SlashCommandsSetUp slashCommandsSetUp = new SlashCommandsSetUp();
 
+		// one per connection: a restart builds a new one so every server is registered again
+		RegistrationTracker registered = new RegistrationTracker();
 		DiscordApiBuilder builder = new DiscordApiBuilder();
 		builder.setAllIntents();
-		builder.setToken(DISCORD_TOKEN);
+		builder.setToken(settings.botToken());
 		builder.setTrustAllCertificates(false);
 		builder.setWaitForServersOnStartup(false);
 		builder.setWaitForUsersOnStartup(false);
 		builder.addServerBecomesAvailableListener(new ServerBecomesAvailable());
-		builder.addListener(new ReactListener(ROLE_ID));
+		builder.addServerBecomesAvailableListener((ServerBecomesAvailableEvent e) -> registerSetupCommands(e.getApi(), e.getServer(), registered));
+		builder.addServerJoinListener((ServerJoinEvent e) -> registerSetupCommands(e.getApi(), e.getServer(), registered));
+		builder.addServerLeaveListener((ServerLeaveEvent e) -> registered.release(e.getServer().getId()));
+		builder.addListener(new ReactListener());
 		builder.addListener(new MessageListener());
-		builder.addListener(new RoleListener(getServer()));
+		builder.addListener(new RoleListener(this::getServer));
 
-		discordApi = builder.login().join();
-		logger.info("You can invite me by using the following url: {}", discordApi.createBotInvite());
-
-		discordApi.bulkOverwriteGlobalApplicationCommands(slashCommandsSetUp.getCommands());
-		discordApi.addSlashCommandCreateListener(new PlexListener(getServer(), this));
-	}
-
-	public void start()
-	{
-		launchScheduledExecutor(discordApi);
-	}
-
-	public void launchScheduledExecutor(DiscordApi api)
-	{
-		if (mService == null || mService.isShutdown())
+		DiscordApi api = LoginWait.await(builder.login(), LOGIN_TIMEOUT_SECONDS, TimeUnit.SECONDS, DiscordApi::disconnect);
+		ScheduledExecutorService service;
+		try
 		{
-			mService = Executors.newScheduledThreadPool(2);
+			logger.info("You can invite me by using the following url: {}", api.createBotInvite());
+
+			api.bulkOverwriteGlobalApplicationCommands(slashCommandsSetUp.getCommands());
+			api.addSlashCommandCreateListener(new PlexListener(getServer(), this));
+			SettingsStore store = settingsStore;
+			if (store != null)
+			{
+				api.addSlashCommandCreateListener(new SetupCommandsListener(store));
+			}
+			for (Server joined : api.getServers())
+			{
+				registerSetupCommands(api, joined, registered);
+			}
+			service = launchScheduledExecutor(api);
+			liveApi = api;
 		}
+		catch (Throwable e)
+		{
+			disconnect(api);
+			throw e;
+		}
+		return () -> {
+			liveApi = null;
+			service.shutdownNow();
+			try
+			{
+				service.awaitTermination(5, TimeUnit.SECONDS);
+			}
+			catch (InterruptedException e)
+			{
+				Thread.currentThread().interrupt();
+			}
+			disconnect(api);
+			clearSessions();
+		};
+	}
+
+	private void disconnect(DiscordApi api)
+	{
+		try
+		{
+			api.disconnect().get(10, TimeUnit.SECONDS);
+		}
+		catch (InterruptedException e)
+		{
+			Thread.currentThread().interrupt();
+		}
+		catch (Exception e)
+		{
+			logger.warn("Discord disconnect did not finish cleanly: {}", e.getClass().getSimpleName());
+		}
+	}
+
+	private void clearSessions()
+	{
+		sessionCache.clear();
+	}
+
+	private static boolean blank(String value)
+	{
+		return value == null || value.isBlank();
+	}
+
+	private ScheduledExecutorService launchScheduledExecutor(DiscordApi api)
+	{
+		ScheduledExecutorService mService = Executors.newScheduledThreadPool(2);
 		CountPlexUsersWorker countPlexUsersWorker = new CountPlexUsersWorker();
 		PlexInformationWorker plexInformationWorker = new PlexInformationWorker();
 		DownloadQueueWorker downloadQueueWorker = new DownloadQueueWorker();
@@ -137,13 +261,13 @@ public class Application
 						}
 						else
 						{
-							logger.error(err.getMessage(), err);
+							logger.error("Scheduled task failed: {}", err.getClass().getSimpleName());
 						}
 					});
 				}
 				catch (Exception e)
 				{
-					logger.error(e.getMessage(), e);
+					logger.error("Scheduled task failed: {}", e.getClass().getSimpleName());
 				}
 			},
 			0, // How long to delay the start
@@ -154,27 +278,33 @@ public class Application
 				// Perform your recurring method calls in here.
 				try
 				{
-					if (api.getTextChannelById(TEXT_CHANNELID).isEmpty())
+					Settings cfg = AppConfig.get();
+					if (blank(cfg.statusChannelId()) || blank(cfg.statusMessageId()))
 					{
 						return;
 					}
-					TextChannel textChannel = api.getTextChannelById(TEXT_CHANNELID).get();
+					if (api.getTextChannelById(cfg.statusChannelId()).isEmpty())
+					{
+						return;
+					}
+					TextChannel textChannel = api.getTextChannelById(cfg.statusChannelId()).get();
 
 					PlexInformationWorker.InfoEmbed info = plexInformationWorker.execute(api, getServer(), getSessions()).join();
-					if (info != null && !info.signature().equals(lastEmbedSignature))
+					String signature = cfg.statusChannelId() + "/" + cfg.statusMessageId() + "/" + (info == null ? "" : info.signature());
+					if (info != null && !signature.equals(lastEmbedSignature))
 					{
-						Message msg = api.getMessageById(MESSAGEID, textChannel).join();
+						Message msg = api.getMessageById(cfg.statusMessageId(), textChannel).join();
 						if (msg != null)
 						{
 							msg.edit(info.embed()).join();
-							lastEmbedSignature = info.signature();
+							lastEmbedSignature = signature;
 							logger.info("Message was modified at {}", LocalDateTime.now());
 						}
 					}
 				}
 				catch (Exception e)
 				{
-					logger.error(e.getMessage(), e);
+					logger.error("Scheduled task failed: {}", e.getClass().getSimpleName());
 				}
 			},
 			0, // How long to delay the start
@@ -190,19 +320,21 @@ public class Application
 				}
 				try
 				{
-					if (api.getTextChannelById(QUEUE_TEXT_CHANNELID).isEmpty())
+					Settings cfg = AppConfig.get();
+					if (blank(cfg.queueChannelId()) || blank(cfg.queueMessageId())
+						|| api.getTextChannelById(cfg.queueChannelId()).isEmpty())
 					{
 						queueEmbedTaskRunning.set(false);
 						return;
 					}
-					TextChannel textChannel = api.getTextChannelById(QUEUE_TEXT_CHANNELID).get();
+					TextChannel textChannel = api.getTextChannelById(cfg.queueChannelId()).get();
 					downloadQueueWorker.execute(api, this).whenComplete(((embedBuilder, throwable) ->
 					{
 						try
 						{
 							if (throwable == null)
 							{
-								api.getMessageById(QUEUEMESSAGEID, textChannel).whenComplete((msg, err) ->
+								api.getMessageById(cfg.queueMessageId(), textChannel).whenComplete((msg, err) ->
 								{
 									if (err == null)
 									{
@@ -212,69 +344,34 @@ public class Application
 									}
 									else
 									{
-										logger.error(err.getMessage(), err);
+										logger.error("Scheduled task failed: {}", err.getClass().getSimpleName());
 									}
 									queueEmbedTaskRunning.set(false);
 								});
 							}
 							else
 							{
-								logger.error(throwable.getMessage(), throwable);
+								logger.error("Scheduled task failed: {}", throwable.getClass().getSimpleName());
 								queueEmbedTaskRunning.set(false);
 							}
 						}
 						catch (Exception e)
 						{
 							queueEmbedTaskRunning.set(false);
-							logger.error(e.getMessage(), e);
+							logger.error("Scheduled task failed: {}", e.getClass().getSimpleName());
 						}
 					}));
 				}
 				catch (Exception e)
 				{
 					queueEmbedTaskRunning.set(false);
-					logger.error(e.getMessage(), e);
+					logger.error("Scheduled task failed: {}", e.getClass().getSimpleName());
 				}
 			},
 			0, // How long to delay the start
 			120, // How long between executions
 			TimeUnit.SECONDS); // The time unit used
-	}
-
-	public CompletableFuture<Boolean> finishExecutor()
-	{
-		return CompletableFuture.supplyAsync(() -> {
-			try
-			{
-				if (mService != null)
-				{
-					awaitTerminationAfterShutdown(mService);
-					return true;
-				}
-				return false;
-			}
-			catch (Throwable t)
-			{
-				throw new CompletionException(t);
-			}
-		}, discordApi.getThreadPool().getExecutorService());
-	}
-
-	public void awaitTerminationAfterShutdown(ExecutorService threadPool)
-	{
-		threadPool.shutdown();
-		try
-		{
-			if (!threadPool.awaitTermination(60, TimeUnit.SECONDS))
-			{
-				threadPool.shutdownNow();
-			}
-		}
-		catch (InterruptedException ex)
-		{
-			threadPool.shutdownNow();
-			Thread.currentThread().interrupt();
-		}
+		return mService;
 	}
 
 	private PlexApi getApi()
@@ -282,57 +379,82 @@ public class Application
 		return plexApi;
 	}
 
-	private void initApi()
+	private void initApi(Settings settings)
 	{
 		PlexApi.Builder apiBuilder = PlexApi.Builder.withDefaultHttpClient();
 		apiBuilder.withPlexDeviceName("Plex Information Bot");
 		plexApi = apiBuilder.build();
-		if (!PLEX_KEY.isEmpty())
+		if (!settings.plexToken().isEmpty())
 		{
-			plexApi.withToken(PLEX_KEY);
+			plexApi.withToken(settings.plexToken());
 		}
 	}
 
+	/**
+	 * Returns the Plex server, retrying the connection if the start-up attempt failed. No lock is held
+	 * during the network call; while one retry is running, other callers get null instead of waiting.
+	 */
 	public PlexMediaServer getServer()
 	{
+		if (plexMediaServer == null && plexApi != null && plexReconnecting.compareAndSet(false, true))
+		{
+			try
+			{
+				if (plexMediaServer == null && plexApi != null)
+				{
+					initPlexMediaServer(AppConfig.get());
+				}
+			}
+			catch (Exception e)
+			{
+				logger.error("Plex is not reachable: {}", e.getClass().getSimpleName());
+			}
+			finally
+			{
+				plexReconnecting.set(false);
+			}
+		}
 		return plexMediaServer;
 	}
 
-	private void initPlexMediaServer() throws URISyntaxException
+	private void initPlexMediaServer(Settings settings) throws URISyntaxException
 	{
-		plexMediaServer = getApi().getMediaServer(new URI("http://" + IP + ":" + PORT));
+		PlexApi api = getApi();
+		PlexMediaServer server = api.getMediaServer(new URI("http://" + settings.plexIp() + ":" + settings.plexPort()));
+		if (api == plexApi) // a restart may have replaced the api while this call was waiting
+		{
+			plexMediaServer = server;
+		}
 	}
 
-	public synchronized PlexStatus getStatus()
+	public PlexStatus getStatus()
 	{
 		return getServer().status();
 	}
 
-	public synchronized List<PlexMediatag<?>> getSessions()
+	public List<PlexMediatag<?>> getSessions()
 	{
-		long now = System.currentTimeMillis();
-		if (now - cachedSessionsAt < SESSION_CACHE_MS)
-		{
-			return cachedSessions;
-		}
+		return sessionCache.get();
+	}
+
+	private List<PlexMediatag<?>> loadSessions()
+	{
 		try
 		{
-			cachedSessions = getStatus().sessions();
+			return getStatus().sessions();
 		}
 		catch (Exception e)
 		{
-			logger.error(e.getMessage(), e);
-			cachedSessions = null;
+			logger.error("Scheduled task failed: {}", e.getClass().getSimpleName());
+			return null;
 		}
-		cachedSessionsAt = now;
-		return cachedSessions;
 	}
 
 
 	private Map<String, String> getMovieTitlesById() throws IOException
 	{
 		Map<String, String> titlesById = new HashMap<>();
-		String urlStr = "http://" + RADARR_URL + "/api/v3/movie";
+		String urlStr = "http://" + AppConfig.get().radarrUrl() + "/api/v3/movie";
 
 		HttpURLConnection connection = null;
 		try
@@ -341,7 +463,7 @@ public class Application
 			connection = (HttpURLConnection) url.openConnection();
 			connection.setRequestMethod("GET");
 			connection.setRequestProperty("accept", "application/json");
-			connection.setRequestProperty("X-API-Key", RADARR_API);
+			connection.setRequestProperty("X-API-Key", AppConfig.get().radarrApiKey());
 			connection.connect();
 
 			if (connection.getResponseCode() >= 400)
@@ -392,7 +514,7 @@ public class Application
 	private Map<String, String> getSeriesTitlesById() throws IOException
 	{
 		Map<String, String> titlesById = new HashMap<>();
-		String urlStr = "http://" + SONARR_URL + "/api/v3/series";
+		String urlStr = "http://" + AppConfig.get().sonarrUrl() + "/api/v3/series";
 
 		HttpURLConnection connection = null;
 		try
@@ -401,7 +523,7 @@ public class Application
 			connection = (HttpURLConnection) url.openConnection();
 			connection.setRequestMethod("GET");
 			connection.setRequestProperty("accept", "application/json");
-			connection.setRequestProperty("X-API-Key", SONARR_API);
+			connection.setRequestProperty("X-API-Key", AppConfig.get().sonarrApiKey());
 			connection.connect();
 
 			if (connection.getResponseCode() >= 400)
@@ -449,7 +571,7 @@ public class Application
 	public List<DownloadDetails> getQueueDetailsRadarr() throws IOException
 	{
 		List<DownloadDetails> queueDetails = new ArrayList<>();
-		String urlStr = "http://" + RADARR_URL + "/api/v3/queue/details";
+		String urlStr = "http://" + AppConfig.get().radarrUrl() + "/api/v3/queue/details";
 		Map<String, String> movieTitlesById = getMovieTitlesById();
 
 		HttpURLConnection connection = null;
@@ -459,7 +581,7 @@ public class Application
 			connection = (HttpURLConnection) url.openConnection();
 			connection.setRequestMethod("GET");
 			connection.setRequestProperty("accept", "application/json");
-			connection.setRequestProperty("X-API-Key", RADARR_API);
+			connection.setRequestProperty("X-API-Key", AppConfig.get().radarrApiKey());
 			connection.connect();
 
 			if (connection.getResponseCode() >= 400)
@@ -509,7 +631,7 @@ public class Application
 	public List<DownloadDetails> getQueueDtailsSonarr() throws IOException
 	{
 		List<DownloadDetails> queueDetails = new ArrayList<>();
-		String urlStr = "http://" + SONARR_URL + "/api/v3/queue/details";
+		String urlStr = "http://" + AppConfig.get().sonarrUrl() + "/api/v3/queue/details";
 		Map<String, String> seriesTitlesById = getSeriesTitlesById();
 
 		HttpURLConnection connection = null;
@@ -519,7 +641,7 @@ public class Application
 			connection = (HttpURLConnection) url.openConnection();
 			connection.setRequestMethod("GET");
 			connection.setRequestProperty("accept", "application/json");
-			connection.setRequestProperty("X-API-Key", SONARR_API);
+			connection.setRequestProperty("X-API-Key", AppConfig.get().sonarrApiKey());
 			connection.connect();
 
 			if (connection.getResponseCode() >= 400)

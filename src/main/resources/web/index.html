@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Plex Info Bot Setup</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main class="container">
+  <h1>Plex Info Bot Setup</h1>
+  <div id="loading" role="status">Loading...</div>
+
+  <section id="login-view" class="card" hidden>
+    <h2>Sign in</h2>
+    <form id="login-form">
+      <label for="login-username">Username</label>
+      <input id="login-username" name="username" type="text" autocomplete="username" required>
+      <label for="login-password">Password</label>
+      <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+      <p id="login-error" class="error" role="alert"></p>
+      <button id="login-submit" type="submit" class="primary">Sign in</button>
+    </form>
+  </section>
+
+  <section id="change-view" class="card" hidden>
+    <h2>Choose a new username and password</h2>
+    <p class="help">You are using the default login. Pick your own before continuing.</p>
+    <form id="change-form">
+      <label for="change-username">New username</label>
+      <input id="change-username" name="username" type="text" autocomplete="username" required>
+      <label for="change-password">New password</label>
+      <input id="change-password" name="password" type="password" autocomplete="new-password" minlength="8" required>
+      <p class="help">At least 8 characters, and not "admin".</p>
+      <label for="change-repeat">Repeat password</label>
+      <input id="change-repeat" name="repeat" type="password" autocomplete="new-password" minlength="8" required>
+      <p id="change-error" class="error" role="alert"></p>
+      <button id="change-submit" type="submit" class="primary">Save login</button>
+    </form>
+  </section>
+
+  <div id="main-view" hidden>
+    <section class="card topbar" aria-label="Bot status and tools">
+      <div id="state-strip" class="strip" aria-live="polite">
+        <span id="bot-state">Bot: ...</span>
+        <a id="status-set" href="#messages-status" data-group="status">Status message: ...</a>
+        <a id="queue-set" href="#messages-queue" data-group="queue">Queue message: ...</a>
+        <a id="role-set" href="#messages-role" data-group="role">Role message: ...</a>
+      </div>
+      <div class="actions">
+        <label class="switch" for="advanced"><input id="advanced" type="checkbox"> Advanced mode</label>
+        <button id="logs-toggle" type="button" aria-expanded="false" aria-controls="logs-view">Logs</button>
+        <button id="logout" type="button">Sign out</button>
+      </div>
+    </section>
+    <div id="warning" class="banner" role="alert" hidden></div>
+    <section id="logs-view" class="card" aria-labelledby="h-logs" hidden>
+      <h2 id="h-logs">Logs</h2>
+      <p class="help">Latest bot log, refreshed every 2 seconds. Tokens and API keys are hidden.</p>
+      <div class="test-row">
+        <button id="logs-pause" type="button">Pause</button>
+        <span id="logs-state" class="help" role="status"></span>
+      </div>
+      <pre id="logs-text" class="logbox" tabindex="0" aria-label="Log output"></pre>
+    </section>
+    <form id="settings-form" novalidate>
+      <div id="sections"></div>
+      <p id="save-result" class="result" aria-live="polite"></p>
+      <button id="save" type="submit" class="primary">Save</button>
+    </form>
+    <p id="footer" class="footer">Discord setup commands are /setupreact, /setupstatus and /setupcontentqueue. Run each one in the channel you want.</p>
+  </div>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>

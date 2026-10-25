@@ -28,6 +28,12 @@ dependencies {
     runtimeOnly("org.apache.logging.log4j:log4j-core:2.19.0")
 
     implementation("com.github.kekolab:javaplex:6.1.0")
+
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 application {
