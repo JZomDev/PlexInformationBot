@@ -14,7 +14,7 @@ public class RegistrationTracker
 		return claimed.add(serverId);
 	}
 
-	/** Lets a later event retry after a failed registration. */
+	/** Lets a later event retry after a failed registration or after the bot left the server. */
 	public void release(long serverId)
 	{
 		claimed.remove(serverId);

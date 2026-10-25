@@ -44,6 +44,7 @@ import org.example.web.MessageProbe;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.event.server.ServerBecomesAvailableEvent;
 import org.javacord.api.event.server.ServerJoinEvent;
+import org.javacord.api.event.server.ServerLeaveEvent;
 import org.example.config.Settings;
 import org.example.listeners.MessageListener;
 import org.example.listeners.PlexListener;
@@ -167,6 +168,7 @@ public class Application implements BotController
 		builder.addServerBecomesAvailableListener(new ServerBecomesAvailable());
 		builder.addServerBecomesAvailableListener((ServerBecomesAvailableEvent e) -> registerSetupCommands(e.getApi(), e.getServer(), registered));
 		builder.addServerJoinListener((ServerJoinEvent e) -> registerSetupCommands(e.getApi(), e.getServer(), registered));
+		builder.addServerLeaveListener((ServerLeaveEvent e) -> registered.release(e.getServer().getId()));
 		builder.addListener(new ReactListener());
 		builder.addListener(new MessageListener());
 		builder.addListener(new RoleListener(this::getServer));
