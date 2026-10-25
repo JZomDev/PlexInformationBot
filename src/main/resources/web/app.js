@@ -260,6 +260,7 @@
         var attrs = { id: 'f-' + f.key, name: f.key, type: f.secret ? 'password' : 'text',
                       autocomplete: f.secret ? 'new-password' : 'off', autocapitalize: 'off', spellcheck: 'false' };
         if (f.inputmode) { attrs.inputmode = f.inputmode; }
+        if (f.secret) { attrs['data-bwignore'] = 'true'; attrs['data-1p-ignore'] = 'true'; attrs['data-lpignore'] = 'true'; }
         var inp = el('input', attrs);
         card.appendChild(inp);
         if (f.secret) { addReveal(inp); }
