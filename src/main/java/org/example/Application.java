@@ -33,6 +33,7 @@ import org.example.bot.BotController;
 import org.example.bot.BotLifecycle;
 import org.example.bot.BotState;
 import org.example.bot.LoginWait;
+import org.example.bot.SessionCache;
 import org.example.config.AppConfig;
 import org.example.config.SettingsStore;
 import org.example.listeners.SetupCommandsListener;
@@ -60,13 +61,14 @@ public class Application implements BotController
 
 	private final BotLifecycle lifecycle = new BotLifecycle(this::connect);
 	private volatile SettingsStore settingsStore;
-	private PlexMediaServer plexMediaServer;
-	private PlexApi plexApi;
+	private volatile PlexMediaServer plexMediaServer;
+	private volatile PlexApi plexApi;
+	private final AtomicBoolean plexReconnecting = new AtomicBoolean(false);
 	private static final long SESSION_CACHE_MS = 2000;
 	private static final long LOGIN_TIMEOUT_SECONDS = 60;
 	private volatile String lastEmbedSignature = "";
-	private List<PlexMediatag<?>> cachedSessions;
-	private long cachedSessionsAt;
+	private final SessionCache<List<PlexMediatag<?>>> sessionCache =
+			new SessionCache<>(this::loadSessions, System::currentTimeMillis, SESSION_CACHE_MS);
 	private final AtomicBoolean queueEmbedTaskRunning = new AtomicBoolean(false);
 
 	/** Lets the setup slash commands save the message IDs they create. */
@@ -154,7 +156,6 @@ public class Application implements BotController
 			throw e;
 		}
 		return () -> {
-			disconnect(api);
 			service.shutdownNow();
 			try
 			{
@@ -164,6 +165,7 @@ public class Application implements BotController
 			{
 				Thread.currentThread().interrupt();
 			}
+			disconnect(api);
 			clearSessions();
 		};
 	}
@@ -184,10 +186,9 @@ public class Application implements BotController
 		}
 	}
 
-	private synchronized void clearSessions()
+	private void clearSessions()
 	{
-		cachedSessions = null;
-		cachedSessionsAt = 0;
+		sessionCache.clear();
 	}
 
 	private static boolean blank(String value)
@@ -345,18 +346,28 @@ public class Application implements BotController
 		}
 	}
 
-	/** Returns the Plex server, retrying the connection if the start-up attempt failed. */
-	public synchronized PlexMediaServer getServer()
+	/**
+	 * Returns the Plex server, retrying the connection if the start-up attempt failed. No lock is held
+	 * during the network call; while one retry is running, other callers get null instead of waiting.
+	 */
+	public PlexMediaServer getServer()
 	{
-		if (plexMediaServer == null && plexApi != null)
+		if (plexMediaServer == null && plexApi != null && plexReconnecting.compareAndSet(false, true))
 		{
 			try
 			{
-				initPlexMediaServer(AppConfig.get());
+				if (plexMediaServer == null && plexApi != null)
+				{
+					initPlexMediaServer(AppConfig.get());
+				}
 			}
 			catch (Exception e)
 			{
 				logger.error("Plex is not reachable: {}", e.getClass().getSimpleName());
+			}
+			finally
+			{
+				plexReconnecting.set(false);
 			}
 		}
 		return plexMediaServer;
@@ -364,32 +375,35 @@ public class Application implements BotController
 
 	private void initPlexMediaServer(Settings settings) throws URISyntaxException
 	{
-		plexMediaServer = getApi().getMediaServer(new URI("http://" + settings.plexIp() + ":" + settings.plexPort()));
+		PlexApi api = getApi();
+		PlexMediaServer server = api.getMediaServer(new URI("http://" + settings.plexIp() + ":" + settings.plexPort()));
+		if (api == plexApi) // a restart may have replaced the api while this call was waiting
+		{
+			plexMediaServer = server;
+		}
 	}
 
-	public synchronized PlexStatus getStatus()
+	public PlexStatus getStatus()
 	{
 		return getServer().status();
 	}
 
-	public synchronized List<PlexMediatag<?>> getSessions()
+	public List<PlexMediatag<?>> getSessions()
 	{
-		long now = System.currentTimeMillis();
-		if (now - cachedSessionsAt < SESSION_CACHE_MS)
-		{
-			return cachedSessions;
-		}
+		return sessionCache.get();
+	}
+
+	private List<PlexMediatag<?>> loadSessions()
+	{
 		try
 		{
-			cachedSessions = getStatus().sessions();
+			return getStatus().sessions();
 		}
 		catch (Exception e)
 		{
 			logger.error("Scheduled task failed: {}", e.getClass().getSimpleName());
-			cachedSessions = null;
+			return null;
 		}
-		cachedSessionsAt = now;
-		return cachedSessions;
 	}
 
 
