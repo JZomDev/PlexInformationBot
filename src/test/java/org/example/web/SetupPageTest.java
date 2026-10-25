@@ -46,4 +46,28 @@ class SetupPageTest
 		assertTrue(css.contains(".health.state-ok .dot"));
 		assertTrue(css.contains(".health.state-down .dot"));
 	}
+
+	@Test
+	void checklistCardSitsBelowTheStatusBoxAndCanBeBroughtBack() throws Exception
+	{
+		String html = resource("index.html");
+		String js = resource("app.js");
+		String css = resource("style.css");
+		int top = html.indexOf("aria-label=\"Bot status and tools\"");
+		int card = html.indexOf("id=\"setup-checklist\"");
+		assertTrue(top > 0 && card > top);
+		assertTrue(card < html.indexOf("id=\"warning\""));
+		assertTrue(html.contains("id=\"checklist-show\""));
+		assertTrue(html.contains("Show setup checklist"));
+		assertTrue(js.contains("setupCommandsRegistered"));
+		assertTrue(js.contains("/setupstatus"));
+		assertTrue(js.contains("/setupcontentqueue"));
+		assertTrue(js.contains("/setupreact"));
+		assertTrue(js.contains("optional: true"));
+		assertTrue(js.contains("REQUIRED_STEPS = 4"));
+		assertTrue(js.contains("class': 'tick'"));
+		assertTrue(js.contains("localStorage.setItem(CHECKLIST_KEY"));
+		assertTrue(js.contains("catch (e)"));
+		assertTrue(css.contains(".checklist li"));
+	}
 }

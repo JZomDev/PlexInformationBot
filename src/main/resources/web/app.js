@@ -47,7 +47,28 @@
 
   var HEALTH_LABELS = { ok: 'Connected', down: 'Unreachable', unset: 'Not set', unknown: 'Checking' };
 
+  var CHECKLIST_KEY = 'setupChecklistDismissed';
+  var CHECKLIST_STEPS = [
+    { text: 'Discord token saved and bot running', how: 'Paste the bot token in the Discord section and press Save.',
+      done: function (st) { return st.botState === 'RUNNING'; } },
+    { text: 'Plex connected', how: 'Fill in the Plex address and token, press Save, then Test.',
+      done: function () { return healthStates.plex === 'ok'; } },
+    { text: 'Slash commands registered', how: 'Invite the bot to your server with the link in the Discord section.',
+      done: function (st) { return st.setupCommandsRegistered === true; } },
+    { text: 'Status message set', how: 'Run /setupstatus in the channel you want.',
+      done: function (st) { return st.statusSet === true; } },
+    { text: 'Download queue message set', optional: true, how: 'Run /setupcontentqueue in the channel you want.',
+      done: function (st) { return st.queueSet === true; } },
+    { text: 'Role message set', optional: true, how: 'Run /setupreact in the channel you want.',
+      done: function (st) { return st.roleSet === true; } }
+  ];
+  var REQUIRED_STEPS = 4;
+
   var csrf = '';
+  var lastStatus = null;
+  var healthStates = {};
+  var checklistDismissed = false;
+  var checklistForced = false;
   var initial = {};
   var revealGen = 0;
   var pollGen = 0;
@@ -225,6 +246,11 @@
     closeLogs();
     stopPolling();
     stopHealth();
+    lastStatus = null;
+    healthStates = {};
+    checklistForced = false;
+    $('setup-checklist').hidden = true;
+    $('checklist-show').hidden = true;
     csrf = '';
     initial = {};
     $('save').disabled = false;
@@ -248,6 +274,7 @@
     buildSections();
     try { advanced = localStorage.getItem('advancedMode') === '1'; } catch (e) { advanced = false; }
     $('advanced').checked = advanced;
+    try { checklistDismissed = localStorage.getItem(CHECKLIST_KEY) === '1'; } catch (e) { checklistDismissed = false; }
     applyMode();
     api('GET', '/api/session').then(function (r) { return route(r.data); })
       .catch(function () { $('loading').textContent = 'Could not reach the server. Reload to try again.'; });
@@ -453,6 +480,7 @@
 
   function renderHealth(data) {
     var anyUnknown = false;
+    healthStates = {};
     HEALTH_SECTIONS.forEach(function (id) {
       var h = data && data[id] ? data[id] : {};
       var st = HEALTH_LABELS.hasOwnProperty(h.state) ? h.state : 'unknown';
@@ -460,11 +488,13 @@
       var node = $('health-' + id);
       if (!node) { return; }
       anyUnknown = anyUnknown || st === 'unknown';
+      healthStates[id] = st;
       node.className = 'health state-' + st;
       node.title = msg;
       node.querySelector('.health-label').textContent = HEALTH_LABELS[st];
       node.querySelector('.sr-only').textContent = msg ? ': ' + msg : '';
     });
+    renderChecklist();
     return anyUnknown;
   }
 
@@ -484,6 +514,9 @@
     api('GET', '/api/health' + (refresh ? '?refresh=1' : '')).then(function (r) {
       if (gen !== healthGen) { return; }
       if (r.status === 200 && renderHealth(r.data)) { again = HEALTH_SOON_MS; }
+    }).then(function () {
+      if (gen !== healthGen) { return; }
+      return api('GET', '/api/status').then(function (s) { if (gen === healthGen && s.status === 200) { renderStatus(s.data); } });
     }).catch(function () { }).then(function () {
       if (gen === healthGen) { healthTimer = setTimeout(function () { healthTick(gen, false); }, again); }
     });
@@ -541,7 +574,58 @@
     setItem('status-set', 'Status message', d.statusSet);
     setItem('queue-set', 'Queue message', d.queueSet);
     setItem('role-set', 'Role message', d.roleSet);
+    lastStatus = d;
+    renderChecklist();
   }
+
+  // ---- first-run checklist ----
+  function stepMark(done) {
+    var mark = el('span', { 'class': 'mark' });
+    if (done) {
+      mark.appendChild(el('span', { 'class': 'tick', 'aria-hidden': 'true', text: '\u2713' }));
+      mark.appendChild(el('span', { 'class': 'sr-only', text: 'Done: ' }));
+    } else {
+      mark.appendChild(el('span', { 'class': 'todo', 'aria-hidden': 'true', text: '\u25cb' }));
+      mark.appendChild(el('span', { 'class': 'sr-only', text: 'To do: ' }));
+    }
+    return mark;
+  }
+
+  function renderChecklist() {
+    if (!lastStatus) { return; }
+    var list = $('checklist-steps');
+    while (list.firstChild) { list.removeChild(list.firstChild); }
+    var requiredDone = true;
+    CHECKLIST_STEPS.forEach(function (step, i) {
+      var done = !!step.done(lastStatus);
+      if (i < REQUIRED_STEPS && !done) { requiredDone = false; }
+      var body = el('div', { 'class': 'step-body' }, [
+        el('span', { 'class': 'step-title', text: step.text + (step.optional ? ' (optional)' : '') })]);
+      if (!done) { body.appendChild(el('p', { 'class': 'help', text: step.how })); }
+      list.appendChild(el('li', { 'class': done ? 'done' : '' }, [stepMark(done), body]));
+    });
+    // While Plex is still being checked nothing is known yet, so the card is not opened by surprise.
+    var waiting = healthStates.plex === undefined || healthStates.plex === 'unknown';
+    var showCard = checklistForced || (!checklistDismissed && !requiredDone && !waiting);
+    $('setup-checklist').hidden = !showCard;
+    $('checklist-show').hidden = showCard;
+  }
+
+  $('checklist-hide').addEventListener('click', function () {
+    checklistDismissed = true;
+    checklistForced = false;
+    try { localStorage.setItem(CHECKLIST_KEY, '1'); } catch (e) { }
+    renderChecklist();
+    $('checklist-show').focus();
+  });
+
+  $('checklist-show').addEventListener('click', function () {
+    checklistDismissed = false;
+    checklistForced = true;
+    try { localStorage.removeItem(CHECKLIST_KEY); } catch (e) { }
+    renderChecklist();
+    $('checklist-hide').focus();
+  });
 
   function setResult(node, ok, msg) {
     node.className = 'result' + (ok === null ? '' : ok ? ' ok' : ' bad');

@@ -79,6 +79,9 @@ public class Application implements BotController
 	/** The connected bot while a connection is open, else null. */
 	private volatile DiscordApi liveApi;
 
+	/** The current connection's registration record, or null while there is no connection. */
+	private volatile RegistrationTracker currentRegistrations;
+
 	/** Answers the setup page's message checks using the running bot. */
 	public MessageProbe messageProbe()
 	{
@@ -110,6 +113,7 @@ public class Application implements BotController
 				.whenComplete((commands, e) -> {
 					if (e == null)
 					{
+						registered.succeeded(id);
 						logger.info("Registered setup commands for server {}", server.getName());
 						return;
 					}
@@ -138,6 +142,13 @@ public class Application implements BotController
 		return lifecycle.state();
 	}
 
+	@Override
+	public boolean setupCommandsRegistered()
+	{
+		RegistrationTracker current = currentRegistrations;
+		return current != null && current.anySucceeded();
+	}
+
 	/** Runs on the lifecycle thread: opens the one Discord connection and its scheduler. */
 	private BotLifecycle.Connection connect(Settings settings) throws Exception
 	{
@@ -160,6 +171,7 @@ public class Application implements BotController
 
 		// one per connection: a restart builds a new one so every server is registered again
 		RegistrationTracker registered = new RegistrationTracker();
+		currentRegistrations = registered;
 		DiscordApiBuilder builder = new DiscordApiBuilder();
 		builder.setAllIntents();
 		builder.setToken(settings.botToken());
@@ -201,6 +213,7 @@ public class Application implements BotController
 		}
 		return () -> {
 			liveApi = null;
+			currentRegistrations = null;
 			service.shutdownNow();
 			try
 			{

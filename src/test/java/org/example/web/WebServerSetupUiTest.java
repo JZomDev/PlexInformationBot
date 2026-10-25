@@ -34,6 +34,7 @@ class WebServerSetupUiTest
 	private WebServer server;
 	private HttpClient http;
 	private String sid;
+	private volatile boolean registered;
 
 	@AfterEach
 	void tearDown()
@@ -54,6 +55,12 @@ class WebServerSetupUiTest
 			public BotState state()
 			{
 				return BotState.RUNNING;
+			}
+
+			@Override
+			public boolean setupCommandsRegistered()
+			{
+				return registered;
 			}
 		};
 		MutableClock clock = new MutableClock();
@@ -125,6 +132,18 @@ class WebServerSetupUiTest
 		start(Map.of());
 		ready();
 		assertEquals("", GSON.fromJson(get("/api/invite", true).body(), JsonObject.class).get("url").getAsString());
+	}
+
+	@Test
+	void statusReportsWhetherSetupCommandsAreRegistered() throws Exception
+	{
+		start(Map.of());
+		ready();
+		assertFalse(GSON.fromJson(get("/api/status", true).body(), JsonObject.class)
+				.get("setupCommandsRegistered").getAsBoolean());
+		registered = true;
+		assertTrue(GSON.fromJson(get("/api/status", true).body(), JsonObject.class)
+				.get("setupCommandsRegistered").getAsBoolean());
 	}
 
 	@Test
