@@ -347,6 +347,7 @@ public class WebServer
 		}
 		catch (IOException e)
 		{
+			logFailure("Could not save credentials", e);
 			HttpIo.sendError(ex, 500, "Could not save credentials");
 			return;
 		}
