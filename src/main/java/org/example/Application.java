@@ -19,9 +19,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -32,19 +29,11 @@ import kekolab.javaplex.PlexMediatag;
 import kekolab.javaplex.PlexStatus;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import static org.example.Main.DISCORD_TOKEN;
-import static org.example.Main.IP;
-import static org.example.Main.MESSAGEID;
-import static org.example.Main.QUEUEMESSAGEID;
-import static org.example.Main.QUEUE_TEXT_CHANNELID;
-import static org.example.Main.RADARR_API;
-import static org.example.Main.RADARR_URL;
-import static org.example.Main.SONARR_API;
-import static org.example.Main.SONARR_URL;
-import static org.example.Main.PLEX_KEY;
-import static org.example.Main.PORT;
-import static org.example.Main.ROLE_ID;
-import static org.example.Main.TEXT_CHANNELID;
+import org.example.bot.BotController;
+import org.example.bot.BotLifecycle;
+import org.example.bot.BotState;
+import org.example.config.AppConfig;
+import org.example.config.Settings;
 import org.example.listeners.MessageListener;
 import org.example.listeners.PlexListener;
 import org.example.listeners.ReactListener;
@@ -57,68 +46,124 @@ import org.javacord.api.DiscordApi;
 import org.javacord.api.DiscordApiBuilder;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.message.embed.EmbedBuilder;
 
-public class Application
+public class Application implements BotController
 {
 
 	private final Logger logger = LogManager.getLogger(Application.class);
 
-	DiscordApi discordApi = null;
-	private ScheduledExecutorService mService;
+	private final BotLifecycle lifecycle = new BotLifecycle(this::connect);
 	private PlexMediaServer plexMediaServer;
 	private PlexApi plexApi;
 	private static final long SESSION_CACHE_MS = 2000;
-	private String lastEmbedSignature = "";
+	private volatile String lastEmbedSignature = "";
 	private List<PlexMediatag<?>> cachedSessions;
 	private long cachedSessionsAt;
 	private final AtomicBoolean queueEmbedTaskRunning = new AtomicBoolean(false);
 
-
-	public Application()
+	@Override
+	public void restart(Settings effective)
 	{
-		initApi();
+		AppConfig.reload();
+		lifecycle.restart(effective);
+	}
+
+	@Override
+	public BotState state()
+	{
+		return lifecycle.state();
+	}
+
+	/** Runs on the lifecycle thread: opens the one Discord connection and its scheduler. */
+	private BotLifecycle.Connection connect(Settings settings) throws Exception
+	{
+		clearSessions();
+		lastEmbedSignature = "";
+		queueEmbedTaskRunning.set(false);
+		initApi(settings);
 		try
 		{
-			initPlexMediaServer();
+			initPlexMediaServer(settings);
 		}
 		catch (Exception e)
 		{
-			logger.error(e.getMessage(), e);
-			return;
+			plexMediaServer = null;
+			logger.error("Could not reach Plex yet, will retry: {}", e.getClass().getSimpleName());
 		}
 
 		SlashCommandsSetUp slashCommandsSetUp = new SlashCommandsSetUp();
 
 		DiscordApiBuilder builder = new DiscordApiBuilder();
 		builder.setAllIntents();
-		builder.setToken(DISCORD_TOKEN);
+		builder.setToken(settings.botToken());
 		builder.setTrustAllCertificates(false);
 		builder.setWaitForServersOnStartup(false);
 		builder.setWaitForUsersOnStartup(false);
 		builder.addServerBecomesAvailableListener(new ServerBecomesAvailable());
-		builder.addListener(new ReactListener(ROLE_ID));
+		builder.addListener(new ReactListener());
 		builder.addListener(new MessageListener());
-		builder.addListener(new RoleListener(getServer()));
+		builder.addListener(new RoleListener(this::getServer));
 
-		discordApi = builder.login().join();
-		logger.info("You can invite me by using the following url: {}", discordApi.createBotInvite());
-
-		discordApi.bulkOverwriteGlobalApplicationCommands(slashCommandsSetUp.getCommands());
-		discordApi.addSlashCommandCreateListener(new PlexListener(getServer(), this));
-	}
-
-	public void start()
-	{
-		launchScheduledExecutor(discordApi);
-	}
-
-	public void launchScheduledExecutor(DiscordApi api)
-	{
-		if (mService == null || mService.isShutdown())
+		DiscordApi api = builder.login().join();
+		ScheduledExecutorService service;
+		try
 		{
-			mService = Executors.newScheduledThreadPool(2);
+			logger.info("You can invite me by using the following url: {}", api.createBotInvite());
+
+			api.bulkOverwriteGlobalApplicationCommands(slashCommandsSetUp.getCommands());
+			api.addSlashCommandCreateListener(new PlexListener(getServer(), this));
+			service = launchScheduledExecutor(api);
 		}
+		catch (RuntimeException e)
+		{
+			disconnect(api);
+			throw e;
+		}
+		return () -> {
+			disconnect(api);
+			service.shutdownNow();
+			try
+			{
+				service.awaitTermination(5, TimeUnit.SECONDS);
+			}
+			catch (InterruptedException e)
+			{
+				Thread.currentThread().interrupt();
+			}
+			clearSessions();
+		};
+	}
+
+	private void disconnect(DiscordApi api)
+	{
+		try
+		{
+			api.disconnect().get(10, TimeUnit.SECONDS);
+		}
+		catch (InterruptedException e)
+		{
+			Thread.currentThread().interrupt();
+		}
+		catch (Exception e)
+		{
+			logger.warn("Discord disconnect did not finish cleanly: {}", e.getClass().getSimpleName());
+		}
+	}
+
+	private synchronized void clearSessions()
+	{
+		cachedSessions = null;
+		cachedSessionsAt = 0;
+	}
+
+	private static boolean blank(String value)
+	{
+		return value == null || value.isBlank();
+	}
+
+	private ScheduledExecutorService launchScheduledExecutor(DiscordApi api)
+	{
+		ScheduledExecutorService mService = Executors.newScheduledThreadPool(2);
 		CountPlexUsersWorker countPlexUsersWorker = new CountPlexUsersWorker();
 		PlexInformationWorker plexInformationWorker = new PlexInformationWorker();
 		DownloadQueueWorker downloadQueueWorker = new DownloadQueueWorker();
@@ -154,20 +199,26 @@ public class Application
 				// Perform your recurring method calls in here.
 				try
 				{
-					if (api.getTextChannelById(TEXT_CHANNELID).isEmpty())
+					Settings cfg = AppConfig.get();
+					if (blank(cfg.statusChannelId()) || blank(cfg.statusMessageId()))
 					{
 						return;
 					}
-					TextChannel textChannel = api.getTextChannelById(TEXT_CHANNELID).get();
+					if (api.getTextChannelById(cfg.statusChannelId()).isEmpty())
+					{
+						return;
+					}
+					TextChannel textChannel = api.getTextChannelById(cfg.statusChannelId()).get();
 
 					PlexInformationWorker.InfoEmbed info = plexInformationWorker.execute(api, getServer(), getSessions()).join();
-					if (info != null && !info.signature().equals(lastEmbedSignature))
+					String signature = cfg.statusChannelId() + "/" + cfg.statusMessageId() + "/" + (info == null ? "" : info.signature());
+					if (info != null && !signature.equals(lastEmbedSignature))
 					{
-						Message msg = api.getMessageById(MESSAGEID, textChannel).join();
+						Message msg = api.getMessageById(cfg.statusMessageId(), textChannel).join();
 						if (msg != null)
 						{
 							msg.edit(info.embed()).join();
-							lastEmbedSignature = info.signature();
+							lastEmbedSignature = signature;
 							logger.info("Message was modified at {}", LocalDateTime.now());
 						}
 					}
@@ -190,19 +241,21 @@ public class Application
 				}
 				try
 				{
-					if (api.getTextChannelById(QUEUE_TEXT_CHANNELID).isEmpty())
+					Settings cfg = AppConfig.get();
+					if (blank(cfg.queueChannelId()) || blank(cfg.queueMessageId())
+						|| api.getTextChannelById(cfg.queueChannelId()).isEmpty())
 					{
 						queueEmbedTaskRunning.set(false);
 						return;
 					}
-					TextChannel textChannel = api.getTextChannelById(QUEUE_TEXT_CHANNELID).get();
+					TextChannel textChannel = api.getTextChannelById(cfg.queueChannelId()).get();
 					downloadQueueWorker.execute(api, this).whenComplete(((embedBuilder, throwable) ->
 					{
 						try
 						{
 							if (throwable == null)
 							{
-								api.getMessageById(QUEUEMESSAGEID, textChannel).whenComplete((msg, err) ->
+								api.getMessageById(cfg.queueMessageId(), textChannel).whenComplete((msg, err) ->
 								{
 									if (err == null)
 									{
@@ -239,42 +292,7 @@ public class Application
 			0, // How long to delay the start
 			120, // How long between executions
 			TimeUnit.SECONDS); // The time unit used
-	}
-
-	public CompletableFuture<Boolean> finishExecutor()
-	{
-		return CompletableFuture.supplyAsync(() -> {
-			try
-			{
-				if (mService != null)
-				{
-					awaitTerminationAfterShutdown(mService);
-					return true;
-				}
-				return false;
-			}
-			catch (Throwable t)
-			{
-				throw new CompletionException(t);
-			}
-		}, discordApi.getThreadPool().getExecutorService());
-	}
-
-	public void awaitTerminationAfterShutdown(ExecutorService threadPool)
-	{
-		threadPool.shutdown();
-		try
-		{
-			if (!threadPool.awaitTermination(60, TimeUnit.SECONDS))
-			{
-				threadPool.shutdownNow();
-			}
-		}
-		catch (InterruptedException ex)
-		{
-			threadPool.shutdownNow();
-			Thread.currentThread().interrupt();
-		}
+		return mService;
 	}
 
 	private PlexApi getApi()
@@ -282,25 +300,37 @@ public class Application
 		return plexApi;
 	}
 
-	private void initApi()
+	private void initApi(Settings settings)
 	{
 		PlexApi.Builder apiBuilder = PlexApi.Builder.withDefaultHttpClient();
 		apiBuilder.withPlexDeviceName("Plex Information Bot");
 		plexApi = apiBuilder.build();
-		if (!PLEX_KEY.isEmpty())
+		if (!settings.plexToken().isEmpty())
 		{
-			plexApi.withToken(PLEX_KEY);
+			plexApi.withToken(settings.plexToken());
 		}
 	}
 
-	public PlexMediaServer getServer()
+	/** Returns the Plex server, retrying the connection if the start-up attempt failed. */
+	public synchronized PlexMediaServer getServer()
 	{
+		if (plexMediaServer == null && plexApi != null)
+		{
+			try
+			{
+				initPlexMediaServer(AppConfig.get());
+			}
+			catch (Exception e)
+			{
+				logger.error("Plex is not reachable: {}", e.getClass().getSimpleName());
+			}
+		}
 		return plexMediaServer;
 	}
 
-	private void initPlexMediaServer() throws URISyntaxException
+	private void initPlexMediaServer(Settings settings) throws URISyntaxException
 	{
-		plexMediaServer = getApi().getMediaServer(new URI("http://" + IP + ":" + PORT));
+		plexMediaServer = getApi().getMediaServer(new URI("http://" + settings.plexIp() + ":" + settings.plexPort()));
 	}
 
 	public synchronized PlexStatus getStatus()
@@ -332,7 +362,7 @@ public class Application
 	private Map<String, String> getMovieTitlesById() throws IOException
 	{
 		Map<String, String> titlesById = new HashMap<>();
-		String urlStr = "http://" + RADARR_URL + "/api/v3/movie";
+		String urlStr = "http://" + AppConfig.get().radarrUrl() + "/api/v3/movie";
 
 		HttpURLConnection connection = null;
 		try
@@ -341,7 +371,7 @@ public class Application
 			connection = (HttpURLConnection) url.openConnection();
 			connection.setRequestMethod("GET");
 			connection.setRequestProperty("accept", "application/json");
-			connection.setRequestProperty("X-API-Key", RADARR_API);
+			connection.setRequestProperty("X-API-Key", AppConfig.get().radarrApiKey());
 			connection.connect();
 
 			if (connection.getResponseCode() >= 400)
@@ -392,7 +422,7 @@ public class Application
 	private Map<String, String> getSeriesTitlesById() throws IOException
 	{
 		Map<String, String> titlesById = new HashMap<>();
-		String urlStr = "http://" + SONARR_URL + "/api/v3/series";
+		String urlStr = "http://" + AppConfig.get().sonarrUrl() + "/api/v3/series";
 
 		HttpURLConnection connection = null;
 		try
@@ -401,7 +431,7 @@ public class Application
 			connection = (HttpURLConnection) url.openConnection();
 			connection.setRequestMethod("GET");
 			connection.setRequestProperty("accept", "application/json");
-			connection.setRequestProperty("X-API-Key", SONARR_API);
+			connection.setRequestProperty("X-API-Key", AppConfig.get().sonarrApiKey());
 			connection.connect();
 
 			if (connection.getResponseCode() >= 400)
@@ -449,7 +479,7 @@ public class Application
 	public List<DownloadDetails> getQueueDetailsRadarr() throws IOException
 	{
 		List<DownloadDetails> queueDetails = new ArrayList<>();
-		String urlStr = "http://" + RADARR_URL + "/api/v3/queue/details";
+		String urlStr = "http://" + AppConfig.get().radarrUrl() + "/api/v3/queue/details";
 		Map<String, String> movieTitlesById = getMovieTitlesById();
 
 		HttpURLConnection connection = null;
@@ -459,7 +489,7 @@ public class Application
 			connection = (HttpURLConnection) url.openConnection();
 			connection.setRequestMethod("GET");
 			connection.setRequestProperty("accept", "application/json");
-			connection.setRequestProperty("X-API-Key", RADARR_API);
+			connection.setRequestProperty("X-API-Key", AppConfig.get().radarrApiKey());
 			connection.connect();
 
 			if (connection.getResponseCode() >= 400)
@@ -509,7 +539,7 @@ public class Application
 	public List<DownloadDetails> getQueueDtailsSonarr() throws IOException
 	{
 		List<DownloadDetails> queueDetails = new ArrayList<>();
-		String urlStr = "http://" + SONARR_URL + "/api/v3/queue/details";
+		String urlStr = "http://" + AppConfig.get().sonarrUrl() + "/api/v3/queue/details";
 		Map<String, String> seriesTitlesById = getSeriesTitlesById();
 
 		HttpURLConnection connection = null;
@@ -519,7 +549,7 @@ public class Application
 			connection = (HttpURLConnection) url.openConnection();
 			connection.setRequestMethod("GET");
 			connection.setRequestProperty("accept", "application/json");
-			connection.setRequestProperty("X-API-Key", SONARR_API);
+			connection.setRequestProperty("X-API-Key", AppConfig.get().sonarrApiKey());
 			connection.connect();
 
 			if (connection.getResponseCode() >= 400)

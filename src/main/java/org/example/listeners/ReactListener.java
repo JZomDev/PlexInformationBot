@@ -4,6 +4,7 @@ import java.util.Optional;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.example.Main;
+import org.example.config.AppConfig;
 import org.javacord.api.entity.emoji.Emoji;
 import org.javacord.api.entity.message.Message;
 import org.javacord.api.entity.permission.Role;
@@ -18,13 +19,6 @@ import org.javacord.api.listener.message.reaction.ReactionRemoveListener;
 public class ReactListener implements ReactionAddListener, ReactionRemoveListener
 {
 	private static final Logger logger = LogManager.getLogger(ReactListener.class);
-	String roleID;
-
-	public ReactListener(String roleID)
-	{
-		this.roleID = roleID;
-	}
-
 	@Override
 	public void onReactionAdd(ReactionAddEvent event)
 	{
@@ -32,7 +26,7 @@ public class ReactListener implements ReactionAddListener, ReactionRemoveListene
 		{
 			User userReacted = event.getUser().get();
 			Server server = event.getServer().get();
-			Optional<Role> role = server.getRoleById(roleID);
+			Optional<Role> role = server.getRoleById(AppConfig.get().roleId());
 
 			role.ifPresent(value -> userReacted.addRole(value).whenComplete((unused, error) -> {
 					logger.info("Assigned role");
@@ -52,7 +46,7 @@ public class ReactListener implements ReactionAddListener, ReactionRemoveListene
 		{
 			User userReacted = event.getUser().get();
 			Server server = event.getServer().get();
-			Optional<Role> role = server.getRoleById(roleID);
+			Optional<Role> role = server.getRoleById(AppConfig.get().roleId());
 
 			role.ifPresent(value -> userReacted.removeRole(value).whenComplete((unused, error) -> {
 					logger.info("Removed role");
