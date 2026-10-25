@@ -359,6 +359,45 @@ class WebServerTest
 		assertEquals("1.2.3.4", r.json().get("plexIp").getAsString());
 	}
 
+	private static String keyBody(String key)
+	{
+		JsonObject o = new JsonObject();
+		o.addProperty("key", key);
+		return o.toString();
+	}
+
+	@Test
+	void secretRouteRevealsSavedAndEnvValuesOnly() throws Exception
+	{
+		start(new SettingsStore(configDir, Map.of("RADARR_API", "env-radarr")));
+		Client c = loggedInReady();
+		call("PUT", "/api/settings", settingsJson("real-bot-token", "1.2.3.4"), c);
+		Res r = call("POST", "/api/secret", keyBody("botToken"), c);
+		assertEquals(200, r.status(), r.body());
+		assertEquals("real-bot-token", r.json().get("value").getAsString());
+		assertEquals("no-store", r.header("Cache-Control"));
+		assertEquals("plex-secret-value",
+				call("POST", "/api/secret", keyBody("plexToken"), c).json().get("value").getAsString());
+		assertEquals("env-radarr",
+				call("POST", "/api/secret", keyBody("radarrApiKey"), c).json().get("value").getAsString());
+		assertFalse(call("GET", "/api/settings", null, c).body().contains("real-bot-token"));
+	}
+
+	@Test
+	void secretRouteRejectsBadRequests() throws Exception
+	{
+		Client c = loggedInReady();
+		Res unknown = call("POST", "/api/secret", keyBody("plexIp<script>"), c);
+		assertEquals(400, unknown.status());
+		assertFalse(unknown.body().contains("script"));
+		assertEquals(400, call("POST", "/api/secret", "{oops", c).status());
+		assertEquals(400, call("POST", "/api/secret", "{}", c).status());
+		Client noCsrf = new Client();
+		noCsrf.sid = c.sid;
+		assertEquals(403, call("POST", "/api/secret", keyBody("botToken"), noCsrf).status());
+		assertEquals(401, call("POST", "/api/secret", keyBody("botToken"), null).status());
+	}
+
 	@Test
 	void envSecretsAreMaskedToo() throws Exception
 	{

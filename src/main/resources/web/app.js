@@ -47,6 +47,7 @@
 
   var csrf = '';
   var initial = {};
+  var revealGen = 0;
   var pollGen = 0;
   var advanced = false;
   var LOG_MAX_CHARS = 200000;
@@ -110,12 +111,56 @@
     wrap.appendChild(input);
     wrap.appendChild(btn);
     setRevealed(input, btn, false);
-    btn.addEventListener('click', function () { setRevealed(input, btn, input.type === 'password'); });
+    btn.addEventListener('click', function () { onRevealClick(input, btn); });
+  }
+
+  // A saved secret is only ever fetched on click, when the field still holds the mask.
+  function onRevealClick(input, btn) {
+    var key = input.id.indexOf('f-') === 0 ? input.id.substring(2) : '';
+    if (input.type !== 'password' || !key || input.value !== MASK || initial[key] !== MASK) {
+      setRevealed(input, btn, input.type === 'password');
+      return;
+    }
+    var gen = revealGen;
+    var note = input.parentNode.querySelector('.reveal-error');
+    if (note) { note.parentNode.removeChild(note); }
+    btn.disabled = true;
+    api('POST', '/api/secret', { key: key }).then(function (r) {
+      if (gen !== revealGen) { return; }
+      if (r.status === 200 && typeof r.data.value === 'string') {
+        input._revealed = r.data.value;
+        input.value = r.data.value;
+        setRevealed(input, btn, true);
+      } else if (r.status !== 401) {
+        showRevealError(input, errText(r, 'Could not show the value'));
+      }
+    }).catch(function () {
+      if (gen === revealGen) { showRevealError(input, 'Could not reach the server'); }
+    }).then(function () { btn.disabled = false; });
+  }
+
+  function showRevealError(input, text) {
+    var p = el('p', { 'class': 'result bad reveal-error', role: 'alert', text: text });
+    input.parentNode.appendChild(p);
+  }
+
+  // The value a field would be saved with: a revealed, unedited secret counts as unchanged.
+  function fieldValue(f) {
+    var inp = $('f-' + f.key);
+    return inp._revealed !== undefined && inp.value === inp._revealed ? initial[f.key] : inp.value;
   }
 
   function hideAllReveals() {
+    revealGen++;
     Array.prototype.forEach.call(document.querySelectorAll('.pw-wrap'), function (w) {
-      setRevealed(w.querySelector('input'), w.querySelector('button.reveal'), false);
+      var inp = w.querySelector('input');
+      if (inp._revealed !== undefined && inp.value === inp._revealed) { inp.value = MASK; }
+      inp._revealed = undefined;
+      var note = w.querySelector('.reveal-error');
+      if (note) { w.removeChild(note); }
+      var b = w.querySelector('button.reveal');
+      b.disabled = false;
+      setRevealed(inp, b, false);
     });
   }
 
@@ -458,7 +503,7 @@
     // Only fields the user changed are sent (absent = keep the saved value, "" = clear it). This is what
     // stops a page that loaded before a /setup command ran from overwriting the IDs that command saved.
     allFields().forEach(function (f) {
-      var v = $('f-' + f.key).value;
+      var v = fieldValue(f);
       if (v !== initial[f.key]) { body[f.key] = v; }
     });
     btn.disabled = true;

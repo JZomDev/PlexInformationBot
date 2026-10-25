@@ -65,7 +65,7 @@ Secrets are redacted before the log leaves the server: Plex tokens, `token` and 
 - Never forward the port to the internet. If you must expose it, put it behind your own reverse proxy with HTTPS.
 - Behind a reverse proxy that rewrites the Host header, signing in can return 403. The page checks that the request's Origin matches its Host, so pass the original Host through. For nginx: `proxy_set_header Host $host;`
 - To reset the login to `admin` / `admin`, delete `credentials.json` in the config folder.
-- The Discord bot token, Plex token and API keys are saved in `settings.json` in the config folder. Keep that folder private. The page only shows saved secrets as `********`.
+- The Discord bot token, Plex token and API keys are saved in `settings.json` in the config folder. Keep that folder private. The page only shows saved secrets as `********`; the eye icon next to a saved secret reveals it to a signed-in user, on click only.
 
 ## Existing installs
 

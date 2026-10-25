@@ -42,4 +42,14 @@ class RevealPasswordPageTest
 		int fill = js.indexOf("function fillSettings(data) {");
 		assertTrue(js.substring(fill, fill + 120).contains("hideAllReveals();"));
 	}
+
+	@Test
+	void savedSecretsAreFetchedOnClickOnly() throws Exception
+	{
+		String js = resource("app.js");
+		assertTrue(js.contains("'/api/secret'"));
+		assertTrue(js.contains("_revealed"));
+		int fill = js.indexOf("function fillSettings(data) {");
+		assertFalse(js.substring(fill, js.indexOf("function setItem")).contains("/api/secret"));
+	}
 }
