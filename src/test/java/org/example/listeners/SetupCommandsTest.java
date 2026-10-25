@@ -73,4 +73,21 @@ class SetupCommandsTest
 	{
 		assertFalse(ReactListener.matchesRoleMessage(Settings.empty(), 7L, 1L, 0L, "x"));
 	}
+
+	@Test
+	void acceptsAnOrdinaryRoleTheBotCanManage()
+	{
+		assertEquals(null, SetupCommandsListener.roleProblem(false, false, true));
+	}
+
+	@Test
+	void rejectsEveryoneManagedAndUnmanageableRolesWithFixedText()
+	{
+		assertEquals("That role cannot be used. Pick a normal role that is below the bot's own role.",
+				SetupCommandsListener.roleProblem(true, false, true));
+		assertEquals("That role cannot be used. Pick a normal role that is below the bot's own role.",
+				SetupCommandsListener.roleProblem(false, true, true));
+		assertEquals("That role cannot be used. Pick a normal role that is below the bot's own role.",
+				SetupCommandsListener.roleProblem(false, false, false));
+	}
 }

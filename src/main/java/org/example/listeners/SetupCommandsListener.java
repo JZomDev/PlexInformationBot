@@ -26,6 +26,8 @@ public class SetupCommandsListener implements SlashCommandCreateListener
 	private static final String SAVE_FAILED = "Settings could not be saved.";
 	private static final String FAILED = "Setup failed. Check the bot's permissions in this channel.";
 
+	private static final String BAD_ROLE = "That role cannot be used. Pick a normal role that is below the bot's own role.";
+
 	private final SettingsStore store;
 
 	public SetupCommandsListener(SettingsStore store)
@@ -56,6 +58,12 @@ public class SetupCommandsListener implements SlashCommandCreateListener
 			default:
 				return s;
 		}
+	}
+
+	/** Null when the role can be handed out by the bot; otherwise the fixed text to reply with. */
+	static String roleProblem(boolean everyoneRole, boolean managed, boolean botCanManage)
+	{
+		return everyoneRole || managed || !botCanManage ? BAD_ROLE : null;
 	}
 
 	@Override
@@ -101,20 +109,23 @@ public class SetupCommandsListener implements SlashCommandCreateListener
 			{
 				return "Pick a role.";
 			}
+			String problem = roleProblem(role.get().isEveryoneRole(), role.get().isManaged(),
+					server.get().canManageRole(interaction.getApi().getYourself(), role.get()));
+			if (problem != null)
+			{
+				return problem;
+			}
 			roleId = role.get().getIdAsString();
 		}
-		Message message;
-		if (command.equals("setupreact"))
-		{
-			message = channel.get().sendMessage(Main.DISCORD_MESSAGE).join();
-			message.addReaction(CLAPPERBOARD).join();
-		}
-		else
-		{
-			message = channel.get().sendMessage(new EmbedBuilder().setTitle("Loading...")).join();
-		}
+		Message message = command.equals("setupreact")
+				? channel.get().sendMessage(Main.DISCORD_MESSAGE).join()
+				: channel.get().sendMessage(new EmbedBuilder().setTitle("Loading...")).join();
 		try
 		{
+			if (command.equals("setupreact"))
+			{
+				message.addReaction(CLAPPERBOARD).join();
+			}
 			String channelId = channel.get().getIdAsString();
 			String messageId = message.getIdAsString();
 			String role = roleId;
@@ -123,9 +134,27 @@ public class SetupCommandsListener implements SlashCommandCreateListener
 		}
 		catch (IOException e)
 		{
-			message.delete().exceptionally(x -> null);
+			deleteQuietly(message);
 			return SAVE_FAILED;
 		}
+		catch (Throwable e)
+		{
+			logger.error("Setup command failed after posting: {}", e.getClass().getSimpleName());
+			deleteQuietly(message);
+			return FAILED;
+		}
 		return "Done. This message is now set up in this channel.";
+	}
+
+	/** Best effort: a left-over message would still be treated as the role message by the legacy text rule. */
+	private static void deleteQuietly(Message message)
+	{
+		try
+		{
+			message.delete().exceptionally(x -> null);
+		}
+		catch (Throwable ignored)
+		{
+		}
 	}
 }
