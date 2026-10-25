@@ -53,4 +53,25 @@ class LoginThrottleTest
 		assertFalse(t.allowed("a"));
 		assertTrue(t.allowed("b"));
 	}
+
+	@Test
+	void staleFailuresResetAndAreDropped()
+	{
+		MutableClock clock = new MutableClock();
+		LoginThrottle t = new LoginThrottle(clock);
+		for (int i = 0; i < 4; i++)
+		{
+			t.failure("a");
+		}
+		t.failure("b");
+		clock.advance(Duration.ofMinutes(6));
+		assertEquals(0, t.size());
+		for (int i = 0; i < 4; i++)
+		{
+			t.failure("a");
+		}
+		assertTrue(t.allowed("a"));
+		t.failure("a");
+		assertFalse(t.allowed("a"));
+	}
 }

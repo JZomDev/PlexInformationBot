@@ -10,11 +10,13 @@ public class LoginThrottle
 {
 	private static final int MAX_FAILURES = 5;
 	private static final Duration BLOCK = Duration.ofSeconds(30);
+	private static final Duration FAILURE_WINDOW = Duration.ofMinutes(5);
 
 	private static final class Entry
 	{
 		int failures;
 		Instant blockedUntil;
+		Instant lastFailure;
 	}
 
 	private final Clock clock;
@@ -41,6 +43,7 @@ public class LoginThrottle
 			return;
 		}
 		e.failures++;
+		e.lastFailure = clock.instant();
 		if (e.failures >= MAX_FAILURES)
 		{
 			e.blockedUntil = clock.instant().plus(BLOCK);
@@ -55,6 +58,13 @@ public class LoginThrottle
 	private void purge()
 	{
 		Instant now = clock.instant();
-		entries.values().removeIf(e -> e.blockedUntil != null && !now.isBefore(e.blockedUntil));
+		entries.values().removeIf(e -> (e.blockedUntil != null && !now.isBefore(e.blockedUntil))
+				|| (e.lastFailure != null && !now.isBefore(e.lastFailure.plus(FAILURE_WINDOW))));
+	}
+
+	synchronized int size()
+	{
+		purge();
+		return entries.size();
 	}
 }
