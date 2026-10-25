@@ -47,6 +47,18 @@ Normally `/setupstatus`, `/setupcontentqueue` and `/setupreact` post a new messa
 - Click Test in a group to check, with the running bot, that the channel and message exist and that the bot wrote the message (a bot can only edit its own messages). For the role message it also checks that the role can be handed out. Test needs the bot to be connected, so save the Discord token first.
 - Only fields you change are saved, so a message set up by a slash command in the meantime is not overwritten by an older copy of the page. Emptying a field clears it.
 
+## Advanced mode
+
+The setup page starts in basic mode: only the Discord token and Plex sections are shown, and the status line at the top (Status, Queue and Role message) is plain text. Tick "Advanced mode" in the header to also show Tautulli, Radarr, Sonarr and the "Discord messages" card, and to make the status line items links to their message groups. The choice is remembered in your browser. Switching modes never clears anything: fields that are hidden keep their saved values.
+
+## Logs
+
+The bot writes its log to `bot.log` in the `logs` folder inside the config folder (`/config/logs/bot.log` by default, readable only by its owner). It rolls over at 2 MB and keeps 3 older files (`bot.1.log` to `bot.3.log`). Console output is unchanged.
+
+Click "Logs" in the setup page header to watch the latest `bot.log` live. It refreshes every 2 seconds while open, scrolls with new lines unless you scroll up, and has a Pause button. Only the last 1000 lines are kept in the page.
+
+Secrets are redacted before the log leaves the server: Plex tokens, `token` and API key values in URLs or headers, and every token or key saved in your settings are replaced with `****`. Redaction also covers the written file for token and API key parameters, but the file is still your private data, so keep the config folder private.
+
 ## Security notes
 
 - Open the page right after starting the container and change the default login. Until you do, anyone who can reach the port can sign in as `admin` / `admin`.

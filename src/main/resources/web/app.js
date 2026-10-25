@@ -50,6 +50,15 @@
   var csrf = '';
   var initial = {};
   var pollGen = 0;
+  var advanced = false;
+  var LOG_MAX_CHARS = 200000;
+  var LOG_MAX_LINES = 1000;
+  var logOffset = -1;
+  var logBuf = '';
+  var logPaused = false;
+  var logOpen = false;
+  var logGen = 0;
+  var logTimer = null;
 
   // Every field the form can send, in page order.
   function allFields() {
@@ -105,7 +114,25 @@
             function (e) { if (timer) { clearTimeout(timer); } throw e; });
   }
 
+  // Basic mode hides the optional cards and turns the status line links into plain text.
+  // Hidden fields stay in the page, so saving never clears them.
+  function applyMode() {
+    Array.prototype.forEach.call(document.querySelectorAll('.adv-only'), function (n) { n.hidden = !advanced; });
+    ['status', 'queue', 'role'].forEach(function (id) {
+      var a = $(id + '-set');
+      if (advanced) { a.setAttribute('href', '#messages-' + id); a.classList.remove('plain'); }
+      else { a.removeAttribute('href'); a.classList.add('plain'); }
+    });
+  }
+
+  $('advanced').addEventListener('change', function () {
+    advanced = $('advanced').checked;
+    try { localStorage.setItem('advancedMode', advanced ? '1' : '0'); } catch (e) { }
+    applyMode();
+  });
+
   function toLogin() {
+    closeLogs();
     stopPolling();
     csrf = '';
     initial = {};
@@ -128,6 +155,9 @@
 
   function init() {
     buildSections();
+    try { advanced = localStorage.getItem('advancedMode') === '1'; } catch (e) { advanced = false; }
+    $('advanced').checked = advanced;
+    applyMode();
     api('GET', '/api/session').then(function (r) { return route(r.data); })
       .catch(function () { $('loading').textContent = 'Could not reach the server. Reload to try again.'; });
   }
@@ -179,7 +209,7 @@
   function buildSections() {
     var host = $('sections');
     SECTIONS.forEach(function (s) {
-      var card = el('section', { 'class': 'card', 'aria-labelledby': 'h-' + s.id });
+      var card = el('section', { 'class': 'card' + (s.optional ? ' adv-only' : ''), 'aria-labelledby': 'h-' + s.id });
       card.appendChild(el('h2', { id: 'h-' + s.id, text: s.title + (s.optional ? ' (optional)' : '') }));
       card.appendChild(el('p', { 'class': 'help', text: s.help }));
       s.fields.forEach(function (f) {
@@ -199,7 +229,7 @@
   }
 
   function buildMessagesCard() {
-    var card = el('section', { id: 'messages', 'class': 'card', 'aria-labelledby': 'h-messages' });
+    var card = el('section', { id: 'messages', 'class': 'card adv-only', 'aria-labelledby': 'h-messages' });
     card.appendChild(el('h2', { id: 'h-messages', text: 'Discord messages (optional)' }));
     card.appendChild(el('p', { 'class': 'help', text: MESSAGE_INTRO }));
     MESSAGE_GROUPS.forEach(function (g) {
@@ -242,7 +272,7 @@
   ['status', 'queue', 'role'].forEach(function (id) {
     $(id + '-set').addEventListener('click', function (ev) {
       ev.preventDefault();
-      goToGroup(id);
+      if (advanced) { goToGroup(id); }
     });
   });
 
@@ -360,6 +390,87 @@
       });
     });
   }
+
+  // ---- logs ----
+  function trimLog(text) {
+    if (text.length > LOG_MAX_CHARS) { text = text.slice(text.length - LOG_MAX_CHARS); text = text.slice(text.indexOf('\n') + 1); }
+    var lines = text.split('\n');
+    if (lines.length > LOG_MAX_LINES + 1) { text = lines.slice(lines.length - LOG_MAX_LINES - 1).join('\n'); }
+    return text;
+  }
+
+  function showLog(text, reset) {
+    var box = $('logs-text');
+    var follow = box.scrollTop + box.clientHeight >= box.scrollHeight - 24;
+    logBuf = trimLog(reset ? text : logBuf + text);
+    box.textContent = logBuf;
+    if (follow || reset) { box.scrollTop = box.scrollHeight; }
+  }
+
+  function scheduleLogs(gen, ms) {
+    clearTimeout(logTimer);
+    logTimer = setTimeout(function () { pollLogs(gen); }, ms);
+  }
+
+  function pollLogs(gen) {
+    if (gen !== logGen || !logOpen || logPaused || document.hidden) { return; }
+    api('GET', '/api/logs?offset=' + logOffset).then(function (r) {
+      if (gen !== logGen) { return; }
+      if (r.status === 200) {
+        if (typeof r.data.nextOffset === 'number') { logOffset = r.data.nextOffset; }
+        if (r.data.reset || r.data.text) { showLog(String(r.data.text || ''), !!r.data.reset); }
+        $('logs-state').textContent = logBuf ? '' : 'No log output yet';
+      } else if (r.status !== 401) {
+        $('logs-state').textContent = 'Could not load the log';
+      }
+    }).catch(function () {
+      if (gen === logGen) { $('logs-state').textContent = 'Could not reach the server'; }
+    }).then(function () { if (gen === logGen) { scheduleLogs(gen, 2000); } });
+  }
+
+  function startLogs() {
+    logGen++;
+    pollLogs(logGen);
+  }
+
+  function closeLogs() {
+    logOpen = false;
+    logGen++;
+    clearTimeout(logTimer);
+    logOffset = -1;
+    logBuf = '';
+    $('logs-text').textContent = '';
+    $('logs-view').hidden = true;
+    $('settings-form').hidden = false;
+    $('footer').hidden = false;
+    $('logs-toggle').textContent = 'Logs';
+    $('logs-toggle').setAttribute('aria-expanded', 'false');
+  }
+
+  $('logs-toggle').addEventListener('click', function () {
+    if (logOpen) { closeLogs(); return; }
+    logOpen = true;
+    logPaused = false;
+    $('logs-pause').textContent = 'Pause';
+    $('logs-view').hidden = false;
+    $('settings-form').hidden = true;
+    $('footer').hidden = true;
+    $('logs-toggle').textContent = 'Settings';
+    $('logs-toggle').setAttribute('aria-expanded', 'true');
+    startLogs();
+  });
+
+  $('logs-pause').addEventListener('click', function () {
+    logPaused = !logPaused;
+    $('logs-pause').textContent = logPaused ? 'Resume' : 'Pause';
+    $('logs-state').textContent = logPaused ? 'Paused' : '';
+    if (logPaused) { clearTimeout(logTimer); logGen++; } else { startLogs(); }
+  });
+
+  document.addEventListener('visibilitychange', function () {
+    if (!logOpen || logPaused) { return; }
+    if (document.hidden) { clearTimeout(logTimer); logGen++; } else { startLogs(); }
+  });
 
   $('logout').addEventListener('click', function () {
     var btn = $('logout');
