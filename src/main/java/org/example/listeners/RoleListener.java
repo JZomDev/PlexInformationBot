@@ -1,16 +1,17 @@
 package org.example.listeners;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import kekolab.javaplex.PlexMediaServer;
 import org.example.Main;
 import org.javacord.api.event.server.role.UserRoleAddEvent;
 import org.javacord.api.event.server.role.UserRoleRemoveEvent;
-import org.javacord.api.listener.GloballyAttachableListener;
-import org.javacord.api.listener.message.MessageCreateListener;
 import org.javacord.api.listener.server.role.UserRoleAddListener;
 import org.javacord.api.listener.server.role.UserRoleRemoveListener;
 
 public class RoleListener implements UserRoleAddListener, UserRoleRemoveListener
 {
+	private final Map<Long, DMListener> activeListeners = new ConcurrentHashMap<>();
 
 	PlexMediaServer plexMediaServer;
 	public RoleListener(PlexMediaServer plexMediaServer)
@@ -26,26 +27,16 @@ public class RoleListener implements UserRoleAddListener, UserRoleRemoveListener
 			long userID = event.getUser().getId();
 			event.getUser().sendMessage("Welcome To " + plexMediaServer.getFriendlyName() + ". Just reply with your email so we can add you to Plex!");
 			event.getUser().sendMessage("I will wait 24 hours for your message, if you do not send it by then I will cancel the command.");
-			try
+
+			DMListener[] holder = new DMListener[1];
+			DMListener dmListener = new DMListener(event.getApi(), userID, plexMediaServer, () -> activeListeners.remove(userID, holder[0]));
+			holder[0] = dmListener;
+			DMListener previous = activeListeners.put(userID, dmListener);
+			if (previous != null)
 			{
-				for (GloballyAttachableListener listenerAttached : event.getApi().getListeners().keySet())
-				{
-					if (listenerAttached instanceof DMListener dmListener)
-					{
-						if (userID == dmListener.userID)
-						{
-							((DMListener) listenerAttached).timer.cancel();
-							event.getApi().removeListener(listenerAttached);
-						}
-					}
-				}
-				MessageCreateListener messageCreateListener = new DMListener(event.getApi(), userID, plexMediaServer);
-				event.getApi().addListener(messageCreateListener);
+				previous.stop();
 			}
-			catch (Exception e)
-			{
-				// ignored
-			}
+			event.getApi().addListener(dmListener);
 		}
 	}
 
@@ -54,17 +45,10 @@ public class RoleListener implements UserRoleAddListener, UserRoleRemoveListener
 	{
 		if (event.getRole().getId() == Long.parseLong(Main.ROLE_ID))
 		{
-			long userID = event.getUser().getId();
-			for (GloballyAttachableListener listenerAttached : event.getApi().getListeners().keySet())
+			DMListener dmListener = activeListeners.remove(event.getUser().getId());
+			if (dmListener != null)
 			{
-				if (listenerAttached instanceof DMListener dmListener)
-				{
-					if (userID == dmListener.userID)
-					{
-						((DMListener) listenerAttached).timer.cancel();
-						event.getApi().removeListener(listenerAttached);
-					}
-				}
+				dmListener.stop();
 			}
 		}
 	}
