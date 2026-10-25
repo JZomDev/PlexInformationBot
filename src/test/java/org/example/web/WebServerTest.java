@@ -515,7 +515,8 @@ class WebServerTest
 	@Test
 	void testRouteResolvesMaskedSecretsFromSavedSettings() throws Exception
 	{
-		start(new SettingsStore(configDir, Map.of("PLEX_KEY", "env-plex-key", "RADARR_API", "env-radarr")));
+		start(new SettingsStore(configDir, Map.of("PLEX_KEY", "env-plex-key", "RADARR_API", "env-radarr",
+				"IP", "1.2.3.4", "PORT", "32400", "RADARR_URL", "h:1")));
 		Client c = loggedInReady();
 		Res r = call("POST", "/api/test/plex", "{\"plexIp\":\"1.2.3.4\",\"plexPort\":\"32400\",\"plexToken\":\"********\"}", c);
 		assertEquals(200, r.status(), r.body());
@@ -567,7 +568,8 @@ class WebServerTest
 		try
 		{
 			checksOverride = new ConnectionChecks(HttpClient.newHttpClient(), t -> new CheckResult(true, "x"));
-			start(new SettingsStore(configDir, Map.of("PLEX_KEY", "SECRET123")));
+			start(new SettingsStore(configDir, Map.of("PLEX_KEY", "SECRET123", "IP", "127.0.0.1",
+					"PORT", String.valueOf(fake.getAddress().getPort()))));
 			Client c = loggedInReady();
 			Res r = call("POST", "/api/test/plex", "{\"plexIp\":\"127.0.0.1\",\"plexPort\":\""
 					+ fake.getAddress().getPort() + "\",\"plexToken\":\"********\"}", c);
@@ -578,6 +580,133 @@ class WebServerTest
 		finally
 		{
 			fake.stop(0);
+		}
+	}
+
+	private static final class Stub
+	{
+		final com.sun.net.httpserver.HttpServer server;
+		final java.util.concurrent.atomic.AtomicInteger hits = new java.util.concurrent.atomic.AtomicInteger();
+		final List<String> seen = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+		Stub() throws IOException
+		{
+			server = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+			server.createContext("/", ex ->
+			{
+				hits.incrementAndGet();
+				seen.add(ex.getRequestURI() + " " + ex.getRequestHeaders().getFirst("X-Api-Key"));
+				byte[] b = "{}".getBytes(StandardCharsets.UTF_8);
+				ex.sendResponseHeaders(200, b.length);
+				ex.getResponseBody().write(b);
+				ex.close();
+			});
+			server.start();
+		}
+
+		String addr()
+		{
+			return "127.0.0.1:" + server.getAddress().getPort();
+		}
+	}
+
+	private static final String READDRESS = "Re-enter the key/token to test a different address";
+
+	private Client realChecksClient(Map<String, String> env) throws Exception
+	{
+		checksOverride = new ConnectionChecks(HttpClient.newHttpClient(), t -> new CheckResult(true, "x"));
+		start(new SettingsStore(configDir, env));
+		return loggedInReady();
+	}
+
+	@Test
+	void changedHostWithMaskIsNotTestedAndNeverReachesTheHost() throws Exception
+	{
+		Stub stub = new Stub();
+		try
+		{
+			Client c = realChecksClient(Map.of("RADARR_URL", "saved.invalid:7878", "RADARR_API", "saved-key"));
+			Res r = call("POST", "/api/test/radarr", "{\"radarrUrl\":\"" + stub.addr() + "\",\"radarrApiKey\":\"********\"}", c);
+			assertEquals(200, r.status(), r.body());
+			assertFalse(r.json().get("ok").getAsBoolean());
+			assertEquals(READDRESS, r.json().get("message").getAsString());
+			r = call("POST", "/api/test/radarr", "{\"radarrUrl\":\"" + stub.addr() + "\"}", c);
+			assertEquals(READDRESS, r.json().get("message").getAsString());
+			assertEquals(0, stub.hits.get());
+		}
+		finally
+		{
+			stub.server.stop(0);
+		}
+	}
+
+	@Test
+	void sameHostWithMaskReachesHostWithSavedSecret() throws Exception
+	{
+		Stub stub = new Stub();
+		try
+		{
+			Client c = realChecksClient(Map.of("RADARR_URL", stub.addr(), "RADARR_API", "saved-key"));
+			call("POST", "/api/test/radarr", "{\"radarrUrl\":\"" + stub.addr() + "\",\"radarrApiKey\":\"********\"}", c);
+			assertEquals(1, stub.hits.get());
+			assertTrue(stub.seen.get(0).endsWith(" saved-key"), stub.seen.get(0));
+		}
+		finally
+		{
+			stub.server.stop(0);
+		}
+	}
+
+	@Test
+	void changedHostWithNewlyTypedSecretReachesHost() throws Exception
+	{
+		Stub stub = new Stub();
+		try
+		{
+			Client c = realChecksClient(Map.of("RADARR_URL", "saved.invalid:7878", "RADARR_API", "saved-key"));
+			call("POST", "/api/test/radarr", "{\"radarrUrl\":\"" + stub.addr() + "\",\"radarrApiKey\":\"typed-key\"}", c);
+			assertEquals(1, stub.hits.get());
+			assertTrue(stub.seen.get(0).endsWith(" typed-key"), stub.seen.get(0));
+		}
+		finally
+		{
+			stub.server.stop(0);
+		}
+	}
+
+	@Test
+	void hostDifferingOnlyBySchemeCaseOrSlashCountsAsSame() throws Exception
+	{
+		Stub stub = new Stub();
+		try
+		{
+			Client c = realChecksClient(Map.of("RADARR_URL", stub.addr(), "RADARR_API", "saved-key"));
+			call("POST", "/api/test/radarr", "{\"radarrUrl\":\" HTTP://" + stub.addr().toUpperCase() + "// \",\"radarrApiKey\":\"********\"}", c);
+			assertEquals(1, stub.hits.get());
+			assertTrue(stub.seen.get(0).endsWith(" saved-key"), stub.seen.get(0));
+		}
+		finally
+		{
+			stub.server.stop(0);
+		}
+	}
+
+	@Test
+	void plexPortChangeWithMaskDoesNotResolve() throws Exception
+	{
+		Stub stub = new Stub();
+		try
+		{
+			Client c = realChecksClient(Map.of("IP", "127.0.0.1", "PORT", "32400", "PLEX_KEY", "saved-token"));
+			int other = stub.server.getAddress().getPort();
+			Res r = call("POST", "/api/test/plex", "{\"plexIp\":\"127.0.0.1\",\"plexPort\":\"" + other
+					+ "\",\"plexToken\":\"********\"}", c);
+			assertEquals(READDRESS, r.json().get("message").getAsString());
+			assertEquals(0, stub.hits.get());
+		}
+		finally
+		{
+			stub.server.stop(0);
 		}
 	}
 }

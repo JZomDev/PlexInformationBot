@@ -408,11 +408,43 @@ public class WebServer
 		HttpIo.sendJson(ex, 200, Map.of("ok", true));
 	}
 
-	/** A submitted field that is absent or the mask is resolved from the saved effective settings. */
-	private static String field(JsonObject in, String key, String saved, boolean secret)
+	private static final CheckResult READDRESS_RESULT = new CheckResult(false,
+			"Re-enter the key/token to test a different address");
+
+	/** A submitted field that is absent is resolved from the saved effective settings. */
+	private static String field(JsonObject in, String key, String saved)
 	{
 		String v = str(in, key);
-		return v == null || (secret && Settings.MASK.equals(v)) ? saved : v;
+		return v == null ? saved : v;
+	}
+
+	/** True when the secret has to come from saved settings (absent or the mask). */
+	private static boolean needsSaved(JsonObject in, String key)
+	{
+		String v = str(in, key);
+		return v == null || Settings.MASK.equals(v);
+	}
+
+	private static boolean sameHost(String submitted, String saved)
+	{
+		String a = ConnectionChecks.cleanHost(submitted);
+		String b = ConnectionChecks.cleanHost(saved);
+		return a == null ? b == null : b != null && a.equalsIgnoreCase(b);
+	}
+
+	private static boolean samePort(String submitted, String saved)
+	{
+		return submitted.trim().equals(saved.trim());
+	}
+
+	/** The secret to test with, or null when a saved secret must not be sent to a changed address. */
+	private static String secret(JsonObject in, String key, String saved, boolean sameAddress)
+	{
+		if (!needsSaved(in, key))
+		{
+			return str(in, key);
+		}
+		return sameAddress ? saved : null;
 	}
 
 	private void test(HttpExchange ex, String section) throws Exception
@@ -426,15 +458,33 @@ public class WebServer
 		Settings e = settings.effective();
 		CheckResult result = switch (section)
 		{
-			case "discord" -> checks.discord(field(in, "botToken", e.botToken(), true));
-			case "plex" -> checks.plex(field(in, "plexIp", e.plexIp(), false), field(in, "plexPort", e.plexPort(), false),
-					field(in, "plexToken", e.plexToken(), true));
-			case "tautulli" -> checks.tautulli(field(in, "tautulliUrl", e.tautulliUrl(), false),
-					field(in, "tautulliApiKey", e.tautulliApiKey(), true));
-			case "radarr" -> checks.radarr(field(in, "radarrUrl", e.radarrUrl(), false),
-					field(in, "radarrApiKey", e.radarrApiKey(), true));
-			default -> checks.sonarr(field(in, "sonarrUrl", e.sonarrUrl(), false),
-					field(in, "sonarrApiKey", e.sonarrApiKey(), true));
+			case "discord" -> checks.discord(secret(in, "botToken", e.botToken(), true));
+			case "plex" ->
+			{
+				String ip = field(in, "plexIp", e.plexIp());
+				String port = field(in, "plexPort", e.plexPort());
+				boolean same = sameHost(ip, e.plexIp()) && samePort(port, e.plexPort());
+				String token = secret(in, "plexToken", e.plexToken(), same);
+				yield token == null ? READDRESS_RESULT : checks.plex(ip, port, token);
+			}
+			case "tautulli" ->
+			{
+				String url = field(in, "tautulliUrl", e.tautulliUrl());
+				String key = secret(in, "tautulliApiKey", e.tautulliApiKey(), sameHost(url, e.tautulliUrl()));
+				yield key == null ? READDRESS_RESULT : checks.tautulli(url, key);
+			}
+			case "radarr" ->
+			{
+				String url = field(in, "radarrUrl", e.radarrUrl());
+				String key = secret(in, "radarrApiKey", e.radarrApiKey(), sameHost(url, e.radarrUrl()));
+				yield key == null ? READDRESS_RESULT : checks.radarr(url, key);
+			}
+			default ->
+			{
+				String url = field(in, "sonarrUrl", e.sonarrUrl());
+				String key = secret(in, "sonarrApiKey", e.sonarrApiKey(), sameHost(url, e.sonarrUrl()));
+				yield key == null ? READDRESS_RESULT : checks.sonarr(url, key);
+			}
 		};
 		HttpIo.sendJson(ex, 200, Map.of("ok", result.ok(), "message", result.message()));
 	}
