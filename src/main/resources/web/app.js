@@ -313,7 +313,12 @@
       var btn = el('button', { id: 'test-' + s.id, type: 'button', text: 'Test' });
       var res = el('p', { id: 'result-' + s.id, 'class': 'result', 'aria-live': 'polite' });
       btn.addEventListener('click', function () { runTest(s, btn, res); });
-      card.appendChild(el('div', { 'class': 'test-row' }, [btn, res]));
+      var row = [btn, res];
+      if (s.id === 'discord') {
+        row.splice(1, 0, el('a', { id: 'invite-link', href: '#', target: '_blank', rel: 'noopener noreferrer', hidden: '',
+                                   text: 'Invite the bot to your server' }));
+      }
+      card.appendChild(el('div', { 'class': 'test-row' }, row));
       host.appendChild(card);
     });
     host.appendChild(buildMessagesCard());
@@ -426,7 +431,20 @@
       fillSettings(rs[0].data);
       renderStatus(rs[1].data);
       show('main-view');
+      refreshInvite();
     });
+  }
+
+  // The invite link is built by the server from the saved token; it is hidden when there is none.
+  var INVITE_PREFIX = 'https://discord.com/oauth2/authorize?';
+
+  function refreshInvite() {
+    return api('GET', '/api/invite').then(function (r) {
+      var a = $('invite-link');
+      var url = r.status === 200 && typeof r.data.url === 'string' ? r.data.url : '';
+      if (url.indexOf(INVITE_PREFIX) === 0) { a.setAttribute('href', url); a.hidden = false; }
+      else { a.removeAttribute('href'); a.hidden = true; }
+    }).catch(function () { });
   }
 
   function fillSettings(data) {
@@ -518,6 +536,7 @@
         setResult(out, null, 'Saved. Starting the bot...');
         return api('GET', '/api/settings').then(function (s) {
           if (s.status === 200) { fillSettings(s.data); }
+          refreshInvite();
           return pollStatus(out, Date.now(), pollGen);
         });
       })

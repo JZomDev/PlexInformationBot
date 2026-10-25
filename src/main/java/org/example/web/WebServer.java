@@ -71,6 +71,7 @@ public class WebServer
 		routes.put("/api/settings", new Api("GET", true, false, this::getSettings));
 		routes.put("/api/secret", new Api("POST", true, false, this::secret));
 		routes.put("/api/logs", new Api("GET", true, false, this::logs));
+		routes.put("/api/invite", new Api("GET", true, false, this::invite));
 	}
 
 	public void start() throws IOException
@@ -633,6 +634,11 @@ public class WebServer
 		body.put("nextOffset", chunk.nextOffset());
 		body.put("reset", chunk.reset());
 		HttpIo.sendJson(ex, 200, body);
+	}
+
+	private void invite(HttpExchange ex, SessionManager.Session s) throws IOException
+	{
+		HttpIo.sendJson(ex, 200, Map.of("url", BotInvite.url(settings.effective().botToken())));
 	}
 
 	private void status(HttpExchange ex, SessionManager.Session s) throws IOException

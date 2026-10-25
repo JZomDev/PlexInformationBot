@@ -88,3 +88,5 @@ dialog#messages .group { border-top: 0; margin-top: 0; padding-top: 0; }
 
 .tick { color: var(--ok); font-weight: 700; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+#invite-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--accent); }
