@@ -214,13 +214,13 @@ public class Application implements BotController
 						}
 						else
 						{
-							logger.error(err.getMessage(), err);
+							logger.error("Scheduled task failed: {}", err.getClass().getSimpleName());
 						}
 					});
 				}
 				catch (Exception e)
 				{
-					logger.error(e.getMessage(), e);
+					logger.error("Scheduled task failed: {}", e.getClass().getSimpleName());
 				}
 			},
 			0, // How long to delay the start
@@ -257,7 +257,7 @@ public class Application implements BotController
 				}
 				catch (Exception e)
 				{
-					logger.error(e.getMessage(), e);
+					logger.error("Scheduled task failed: {}", e.getClass().getSimpleName());
 				}
 			},
 			0, // How long to delay the start
@@ -297,28 +297,28 @@ public class Application implements BotController
 									}
 									else
 									{
-										logger.error(err.getMessage(), err);
+										logger.error("Scheduled task failed: {}", err.getClass().getSimpleName());
 									}
 									queueEmbedTaskRunning.set(false);
 								});
 							}
 							else
 							{
-								logger.error(throwable.getMessage(), throwable);
+								logger.error("Scheduled task failed: {}", throwable.getClass().getSimpleName());
 								queueEmbedTaskRunning.set(false);
 							}
 						}
 						catch (Exception e)
 						{
 							queueEmbedTaskRunning.set(false);
-							logger.error(e.getMessage(), e);
+							logger.error("Scheduled task failed: {}", e.getClass().getSimpleName());
 						}
 					}));
 				}
 				catch (Exception e)
 				{
 					queueEmbedTaskRunning.set(false);
-					logger.error(e.getMessage(), e);
+					logger.error("Scheduled task failed: {}", e.getClass().getSimpleName());
 				}
 			},
 			0, // How long to delay the start
@@ -383,7 +383,7 @@ public class Application implements BotController
 		}
 		catch (Exception e)
 		{
-			logger.error(e.getMessage(), e);
+			logger.error("Scheduled task failed: {}", e.getClass().getSimpleName());
 			cachedSessions = null;
 		}
 		cachedSessionsAt = now;

@@ -213,7 +213,7 @@ public class PlexInformationWorker
 		}
 		catch (Exception e)
 		{
-			log.error(e);
+			log.error("Could not load Tautulli user names: {}", e.getClass().getSimpleName());
 			return Map.of();
 		}
 	}

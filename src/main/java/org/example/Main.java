@@ -4,6 +4,7 @@ import java.net.http.HttpClient;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.logging.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.example.config.AppConfig;
@@ -25,6 +26,17 @@ public class Main
 	private static final int DEFAULT_WEB_PORT = 4546;
 	private static final String DEFAULT_CONFIG_DIR = "/config";
 
+	// Held strongly so java.util.logging cannot garbage collect the logger and drop its level.
+	private static final java.util.logging.Logger JAVAPLEX_LOGGER = java.util.logging.Logger.getLogger("kekolab.javaplex");
+
+	/**
+	 * The javaplex library logs every Plex request URL, including the Plex token, at INFO.
+	 */
+	static void configureLogging()
+	{
+		JAVAPLEX_LOGGER.setLevel(Level.WARNING);
+	}
+
 	/**
 	 * The entrance point of our program.
 	 *
@@ -32,6 +44,7 @@ public class Main
 	 */
 	public static void main(String[] args)
 	{
+		configureLogging();
 		logger.info("The current version of the project is {}", CURRENT_VERSION);
 
 		int port = DEFAULT_WEB_PORT;
