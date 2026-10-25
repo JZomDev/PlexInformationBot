@@ -126,4 +126,24 @@ class WebServerSetupUiTest
 		ready();
 		assertEquals("", GSON.fromJson(get("/api/invite", true).body(), JsonObject.class).get("url").getAsString());
 	}
+
+	@Test
+	void healthNeedsASessionAndListsEverySection() throws Exception
+	{
+		start(Map.of("BOT_TOKEN", TOKEN));
+		assertEquals(401, get("/api/health", false).statusCode());
+		ready();
+		HttpResponse<String> r = get("/api/health", true);
+		assertEquals(200, r.statusCode());
+		JsonObject body = GSON.fromJson(r.body(), JsonObject.class);
+		for (String s : new String[] {"plex", "tautulli", "radarr", "sonarr", "discord"})
+		{
+			assertTrue(body.has(s), s);
+			assertTrue(body.getAsJsonObject(s).has("state"));
+			assertTrue(body.getAsJsonObject(s).has("message"));
+		}
+		assertEquals("ok", body.getAsJsonObject("discord").get("state").getAsString());
+		assertEquals("unset", body.getAsJsonObject("plex").get("state").getAsString());
+		assertFalse(r.body().contains(TOKEN));
+	}
 }

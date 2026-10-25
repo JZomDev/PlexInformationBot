@@ -45,6 +45,8 @@
   var LINK_RE = /^https:\/\/(?:www\.|ptb\.|canary\.)?discord(?:app)?\.com\/channels\/(\d+)\/(\d+)\/(\d+)$/;
   var STATE_LABELS = { NOT_CONFIGURED: 'not configured', STARTING: 'starting', RUNNING: 'running', FAILED: 'failed' };
 
+  var HEALTH_LABELS = { ok: 'Connected', down: 'Unreachable', unset: 'Not set', unknown: 'Checking' };
+
   var csrf = '';
   var initial = {};
   var revealGen = 0;
@@ -222,6 +224,7 @@
   function toLogin() {
     closeLogs();
     stopPolling();
+    stopHealth();
     csrf = '';
     initial = {};
     $('save').disabled = false;
@@ -298,7 +301,12 @@
     var host = $('sections');
     SECTIONS.forEach(function (s) {
       var card = el('section', { 'class': 'card' + (s.optional ? ' adv-only' : ''), 'aria-labelledby': 'h-' + s.id });
-      card.appendChild(el('h2', { id: 'h-' + s.id, text: s.title + (s.optional ? ' (optional)' : '') }));
+      var dot = el('span', { 'class': 'dot', 'aria-hidden': 'true' });
+      var label = el('span', { 'class': 'health-label', text: HEALTH_LABELS.unknown });
+      var note = el('span', { 'class': 'sr-only' });
+      card.appendChild(el('div', { 'class': 'sec-head' }, [
+        el('h2', { id: 'h-' + s.id, text: s.title + (s.optional ? ' (optional)' : '') }),
+        el('span', { id: 'health-' + s.id, 'class': 'health state-unknown' }, [dot, label, note])]));
       card.appendChild(el('p', { 'class': 'help', text: s.help }));
       s.fields.forEach(function (f) {
         card.appendChild(el('label', { 'for': 'f-' + f.key, text: f.label }));
@@ -432,8 +440,59 @@
       renderStatus(rs[1].data);
       show('main-view');
       refreshInvite();
+      startHealth(false);
     });
   }
+
+  // ---- health dots: the server answers from a cache, so this only reads; every 30 s while visible ----
+  var HEALTH_SECTIONS = ['discord', 'plex', 'tautulli', 'radarr', 'sonarr'];
+  var HEALTH_EVERY_MS = 30000;
+  var HEALTH_SOON_MS = 3000;
+  var healthGen = 0;
+  var healthTimer = null;
+
+  function renderHealth(data) {
+    var anyUnknown = false;
+    HEALTH_SECTIONS.forEach(function (id) {
+      var h = data && data[id] ? data[id] : {};
+      var st = HEALTH_LABELS.hasOwnProperty(h.state) ? h.state : 'unknown';
+      var msg = typeof h.message === 'string' ? h.message : '';
+      var node = $('health-' + id);
+      if (!node) { return; }
+      anyUnknown = anyUnknown || st === 'unknown';
+      node.className = 'health state-' + st;
+      node.title = msg;
+      node.querySelector('.health-label').textContent = HEALTH_LABELS[st];
+      node.querySelector('.sr-only').textContent = msg ? ': ' + msg : '';
+    });
+    return anyUnknown;
+  }
+
+  function stopHealth() {
+    healthGen++;
+    clearTimeout(healthTimer);
+  }
+
+  function startHealth(refresh) {
+    stopHealth();
+    healthTick(healthGen, refresh);
+  }
+
+  function healthTick(gen, refresh) {
+    if (gen !== healthGen || document.hidden || $('main-view').hidden) { return; }
+    var again = HEALTH_EVERY_MS;
+    api('GET', '/api/health' + (refresh ? '?refresh=1' : '')).then(function (r) {
+      if (gen !== healthGen) { return; }
+      if (r.status === 200 && renderHealth(r.data)) { again = HEALTH_SOON_MS; }
+    }).catch(function () { }).then(function () {
+      if (gen === healthGen) { healthTimer = setTimeout(function () { healthTick(gen, false); }, again); }
+    });
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { stopHealth(); }
+    else if (!$('main-view').hidden) { startHealth(false); }
+  });
 
   // The invite link is built by the server from the saved token; it is hidden when there is none.
   var INVITE_PREFIX = 'https://discord.com/oauth2/authorize?';
@@ -537,6 +596,7 @@
         return api('GET', '/api/settings').then(function (s) {
           if (s.status === 200) { fillSettings(s.data); }
           refreshInvite();
+          startHealth(true);
           return pollStatus(out, Date.now(), pollGen);
         });
       })

@@ -90,3 +90,9 @@ dialog#messages .group { border-top: 0; margin-top: 0; padding-top: 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 #invite-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--accent); }
+.sec-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-bottom: 8px; }
+.sec-head h2 { margin: 0; }
+.health { display: inline-flex; align-items: center; gap: 6px; font-size: .9rem; color: var(--muted); }
+.dot { flex: none; width: .75rem; height: .75rem; border-radius: 50%; background: #8a919b; }
+.health.state-ok .dot { background: var(--ok); }
+.health.state-down .dot { background: var(--bad); }
