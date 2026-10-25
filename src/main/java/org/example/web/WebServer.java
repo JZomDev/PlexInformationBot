@@ -69,6 +69,7 @@ public class WebServer
 		routes.put("/api/credentials", new Api("POST", true, true, this::changeCredentials));
 		routes.put("/api/status", new Api("GET", true, false, this::status));
 		routes.put("/api/settings", new Api("GET", true, false, this::getSettings));
+		routes.put("/api/secret", new Api("POST", true, false, this::secret));
 		routes.put("/api/logs", new Api("GET", true, false, this::logs));
 	}
 
@@ -366,6 +367,30 @@ public class WebServer
 		JsonObject body = HttpIo.GSON.toJsonTree(settings.effective().masked()).getAsJsonObject();
 		body.addProperty("warning", settings.loadWarning().orElse(null));
 		HttpIo.sendJson(ex, 200, body);
+	}
+
+	/** Revealed on request only; the value and the request body are never logged. */
+	private void secret(HttpExchange ex, SessionManager.Session s) throws Exception
+	{
+		JsonObject in = parseObject(ex);
+		String key = in == null ? null : str(in, "key");
+		Settings e = settings.effective();
+		String value = key == null ? null : switch (key)
+		{
+			case "botToken" -> e.botToken();
+			case "plexToken" -> e.plexToken();
+			case "tautulliApiKey" -> e.tautulliApiKey();
+			case "radarrApiKey" -> e.radarrApiKey();
+			case "sonarrApiKey" -> e.sonarrApiKey();
+			default -> null;
+		};
+		if (value == null)
+		{
+			HttpIo.sendError(ex, 400, "Unknown secret");
+			return;
+		}
+		ex.getResponseHeaders().set("Cache-Control", "no-store");
+		HttpIo.sendJson(ex, 200, Map.of("value", value));
 	}
 
 	/** Keys absent from the body keep the saved value; present keys (even empty) replace it. */

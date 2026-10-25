@@ -47,6 +47,7 @@
 
   var csrf = '';
   var initial = {};
+  var revealGen = 0;
   var pollGen = 0;
   var advanced = false;
   var LOG_MAX_CHARS = 200000;
@@ -76,7 +77,95 @@
     return e;
   }
 
+  // ---- reveal (eye) button on password-type fields ----
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  function eyeIcon(off) {
+    var svg = document.createElementNS(SVG_NS, 'svg');
+    [['viewBox', '0 0 24 24'], ['width', '22'], ['height', '22'], ['fill', 'none'], ['stroke', 'currentColor'],
+     ['stroke-width', '2'], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round'], ['aria-hidden', 'true'],
+     ['focusable', 'false']].forEach(function (a) { svg.setAttribute(a[0], a[1]); });
+    var paths = ['M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z'];
+    if (off) { paths.push('M3 3l18 18'); }
+    var shapes = paths.map(function (d) { var p = document.createElementNS(SVG_NS, 'path'); p.setAttribute('d', d); return p; });
+    if (!off) {
+      var c = document.createElementNS(SVG_NS, 'circle');
+      c.setAttribute('cx', '12'); c.setAttribute('cy', '12'); c.setAttribute('r', '3');
+      shapes.push(c);
+    }
+    shapes.forEach(function (n) { svg.appendChild(n); });
+    return svg;
+  }
+
+  function setRevealed(input, btn, on) {
+    input.type = on ? 'text' : 'password';
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.setAttribute('aria-label', on ? 'Hide value' : 'Show value');
+    while (btn.firstChild) { btn.removeChild(btn.firstChild); }
+    btn.appendChild(eyeIcon(on));
+  }
+
+  function addReveal(input) {
+    var wrap = el('div', { 'class': 'pw-wrap' });
+    var btn = el('button', { type: 'button', 'class': 'reveal' });
+    input.parentNode.replaceChild(wrap, input);
+    wrap.appendChild(input);
+    wrap.appendChild(btn);
+    setRevealed(input, btn, false);
+    btn.addEventListener('click', function () { onRevealClick(input, btn); });
+  }
+
+  // A saved secret is only ever fetched on click, when the field still holds the mask.
+  function onRevealClick(input, btn) {
+    var key = input.id.indexOf('f-') === 0 ? input.id.substring(2) : '';
+    if (input.type !== 'password' || !key || input.value !== MASK || initial[key] !== MASK) {
+      setRevealed(input, btn, input.type === 'password');
+      return;
+    }
+    var gen = revealGen;
+    var note = input.parentNode.querySelector('.reveal-error');
+    if (note) { note.parentNode.removeChild(note); }
+    btn.disabled = true;
+    api('POST', '/api/secret', { key: key }).then(function (r) {
+      if (gen !== revealGen) { return; }
+      if (r.status === 200 && typeof r.data.value === 'string') {
+        input._revealed = r.data.value;
+        input.value = r.data.value;
+        setRevealed(input, btn, true);
+      } else if (r.status !== 401) {
+        showRevealError(input, errText(r, 'Could not show the value'));
+      }
+    }).catch(function () {
+      if (gen === revealGen) { showRevealError(input, 'Could not reach the server'); }
+    }).then(function () { btn.disabled = false; });
+  }
+
+  function showRevealError(input, text) {
+    var p = el('p', { 'class': 'result bad reveal-error', role: 'alert', text: text });
+    input.parentNode.appendChild(p);
+  }
+
+  // The value a field would be saved with: a revealed, unedited secret counts as unchanged.
+  function fieldValue(f) {
+    var inp = $('f-' + f.key);
+    return inp._revealed !== undefined && inp.value === inp._revealed ? initial[f.key] : inp.value;
+  }
+
+  function hideAllReveals() {
+    revealGen++;
+    Array.prototype.forEach.call(document.querySelectorAll('.pw-wrap'), function (w) {
+      var inp = w.querySelector('input');
+      if (inp._revealed !== undefined && inp.value === inp._revealed) { inp.value = MASK; }
+      inp._revealed = undefined;
+      var note = w.querySelector('.reveal-error');
+      if (note) { w.removeChild(note); }
+      var b = w.querySelector('button.reveal');
+      b.disabled = false;
+      setRevealed(inp, b, false);
+    });
+  }
+
   function show(view) {
+    hideAllReveals();
     ['loading', 'login-view', 'change-view', 'main-view'].forEach(function (v) {
       $(v).hidden = (v !== view);
     });
@@ -216,7 +305,10 @@
         var attrs = { id: 'f-' + f.key, name: f.key, type: f.secret ? 'password' : 'text',
                       autocomplete: f.secret ? 'new-password' : 'off', autocapitalize: 'off', spellcheck: 'false' };
         if (f.inputmode) { attrs.inputmode = f.inputmode; }
-        card.appendChild(el('input', attrs));
+        if (f.secret) { attrs['data-bwignore'] = 'true'; attrs['data-1p-ignore'] = 'true'; attrs['data-lpignore'] = 'true'; }
+        var inp = el('input', attrs);
+        card.appendChild(inp);
+        if (f.secret) { addReveal(inp); }
       });
       var btn = el('button', { id: 'test-' + s.id, type: 'button', text: 'Test' });
       var res = el('p', { id: 'result-' + s.id, 'class': 'result', 'aria-live': 'polite' });
@@ -339,6 +431,7 @@
 
   function fillSettings(data) {
     initial = {};
+    hideAllReveals();
     allFields().forEach(function (f) {
       var v = data[f.key] == null ? '' : String(data[f.key]);
       initial[f.key] = v;
@@ -349,12 +442,28 @@
     else { w.textContent = ''; w.hidden = true; }
   }
 
+  function setItem(id, label, isSet) {
+    var el = $(id);
+    el.textContent = '';
+    if (!isSet) { el.textContent = label + ': not set'; return; }
+    el.appendChild(document.createTextNode(label));
+    var tick = document.createElement('span');
+    tick.className = 'tick';
+    tick.setAttribute('aria-hidden', 'true');
+    tick.textContent = ' \u2713';
+    el.appendChild(tick);
+    var sr = document.createElement('span');
+    sr.className = 'sr-only';
+    sr.textContent = ': set';
+    el.appendChild(sr);
+  }
+
   function renderStatus(d) {
     var label = STATE_LABELS[d.botState] || String(d.botState || 'unknown').toLowerCase();
     $('bot-state').textContent = 'Bot: ' + label;
-    $('status-set').textContent = 'Status message: ' + (d.statusSet ? 'set' : 'not set');
-    $('queue-set').textContent = 'Queue message: ' + (d.queueSet ? 'set' : 'not set');
-    $('role-set').textContent = 'Role message: ' + (d.roleSet ? 'set' : 'not set');
+    setItem('status-set', 'Status message', d.statusSet);
+    setItem('queue-set', 'Queue message', d.queueSet);
+    setItem('role-set', 'Role message', d.roleSet);
   }
 
   function setResult(node, ok, msg) {
@@ -394,7 +503,7 @@
     // Only fields the user changed are sent (absent = keep the saved value, "" = clear it). This is what
     // stops a page that loaded before a /setup command ran from overwriting the IDs that command saved.
     allFields().forEach(function (f) {
-      var v = $('f-' + f.key).value;
+      var v = fieldValue(f);
       if (v !== initial[f.key]) { body[f.key] = v; }
     });
     btn.disabled = true;
@@ -529,5 +638,6 @@
     });
   });
 
+  ['login-password', 'change-password', 'change-repeat'].forEach(function (id) { addReveal($(id)); });
   init();
 })();

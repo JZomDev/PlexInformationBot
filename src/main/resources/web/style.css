@@ -77,3 +77,14 @@ dialog#messages {
 dialog#messages::backdrop { background: rgba(0, 0, 0, .6); }
 dialog#messages .group { border-top: 0; margin-top: 0; padding-top: 0; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 12px; }
+.pw-wrap { position: relative; }
+.pw-wrap input { padding-right: 48px; }
+.pw-wrap button.reveal {
+  position: absolute; top: 0; right: 0; width: 44px; height: 100%; min-width: 36px; min-height: 36px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--muted); background: transparent; border: 0; border-radius: 0 6px 6px 0;
+}
+.pw-wrap button.reveal[aria-pressed="true"] { color: var(--text); }
+
+.tick { color: var(--ok); font-weight: 700; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
