@@ -69,6 +69,7 @@ public class WebServer
 		routes.put("/api/credentials", new Api("POST", true, true, this::changeCredentials));
 		routes.put("/api/status", new Api("GET", true, false, this::status));
 		routes.put("/api/settings", new Api("GET", true, false, this::getSettings));
+		routes.put("/api/logs", new Api("GET", true, false, this::logs));
 	}
 
 	public void start() throws IOException
@@ -575,6 +576,38 @@ public class WebServer
 		{
 			return PROBE_FAILED;
 		}
+	}
+
+	private void logs(HttpExchange ex, SessionManager.Session s) throws IOException
+	{
+		long offset = -1;
+		String query = ex.getRequestURI().getRawQuery();
+		if (query != null)
+		{
+			for (String pair : query.split("&"))
+			{
+				if (pair.startsWith("offset="))
+				{
+					try
+					{
+						offset = Long.parseLong(pair.substring("offset=".length()));
+					}
+					catch (NumberFormatException ignored)
+					{
+						offset = -1;
+					}
+				}
+			}
+		}
+		Settings e = settings.effective();
+		List<String> secrets = List.of(e.botToken(), e.plexToken(), e.tautulliApiKey(), e.radarrApiKey(),
+				e.sonarrApiKey());
+		LogTail.Chunk chunk = LogTail.read(settings.dir().resolve("logs").resolve("bot.log"), offset, secrets);
+		Map<String, Object> body = new LinkedHashMap<>();
+		body.put("text", chunk.text());
+		body.put("nextOffset", chunk.nextOffset());
+		body.put("reset", chunk.reset());
+		HttpIo.sendJson(ex, 200, body);
 	}
 
 	private void status(HttpExchange ex, SessionManager.Session s) throws IOException
