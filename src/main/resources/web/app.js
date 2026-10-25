@@ -120,9 +120,10 @@
     Array.prototype.forEach.call(document.querySelectorAll('.adv-only'), function (n) { n.hidden = !advanced; });
     ['status', 'queue', 'role'].forEach(function (id) {
       var a = $(id + '-set');
-      if (advanced) { a.setAttribute('href', '#messages-' + id); a.classList.remove('plain'); }
-      else { a.removeAttribute('href'); a.classList.add('plain'); }
+      if (advanced) { a.setAttribute('href', '#messages-' + id); a.setAttribute('aria-controls', 'messages'); a.classList.remove('plain'); }
+      else { a.removeAttribute('href'); a.removeAttribute('aria-controls'); a.classList.add('plain'); }
     });
+    if (!advanced) { closeMessages(false); }
   }
 
   $('advanced').addEventListener('change', function () {
@@ -229,11 +230,18 @@
   }
 
   function buildMessagesCard() {
-    var card = el('section', { id: 'messages', 'class': 'card adv-only', 'aria-labelledby': 'h-messages' });
-    card.appendChild(el('h2', { id: 'h-messages', text: 'Discord messages (optional)' }));
+    // Hidden until a status line link opens it; shows one group at a time.
+    var card = el('section', { id: 'messages', 'class': 'card', 'aria-labelledby': 'h-messages', hidden: '' });
+    var closeBtn = el('button', { id: 'messages-close', type: 'button', 'class': 'close', text: 'Close' });
+    closeBtn.addEventListener('click', function () { closeMessages(true); });
+    card.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' || ev.key === 'Esc') { ev.preventDefault(); closeMessages(true); }
+    });
+    card.appendChild(el('div', { 'class': 'card-head' }, [
+      el('h2', { id: 'h-messages', text: 'Discord messages (optional)' }), closeBtn]));
     card.appendChild(el('p', { 'class': 'help', text: MESSAGE_INTRO }));
     MESSAGE_GROUPS.forEach(function (g) {
-      var box = el('div', { id: 'messages-' + g.id, 'class': 'group', role: 'group', 'aria-labelledby': 'h-' + g.id });
+      var box = el('div', { id: 'messages-' + g.id, 'class': 'group', role: 'group', 'aria-labelledby': 'h-' + g.id, hidden: '' });
       box.appendChild(el('h3', { id: 'h-' + g.id, text: g.title }));
       box.appendChild(el('p', { 'class': 'help', text: g.help }));
       box.appendChild(el('label', { 'for': 'link-' + g.id, text: 'Paste message link (fills the channel and message ID below)' }));
@@ -258,15 +266,42 @@
     return card;
   }
 
-  // Status line links: scroll to the group, focus its first field and highlight it briefly.
+  // Status line links open the messages card on one group. Hidden groups stay in the DOM so
+  // saving never clears their values.
+  var openGroup = null;
+  var flashTimer = null;
+
+  function markLinks() {
+    ['status', 'queue', 'role'].forEach(function (id) {
+      var a = $(id + '-set');
+      if (advanced) { a.setAttribute('aria-expanded', openGroup === id ? 'true' : 'false'); }
+      else { a.removeAttribute('aria-expanded'); }
+    });
+  }
+
+  function closeMessages(restoreFocus) {
+    var opener = openGroup;
+    openGroup = null;
+    var card = $('messages');
+    if (card) { card.hidden = true; }
+    MESSAGE_GROUPS.forEach(function (g) { var b = $('messages-' + g.id); if (b) { b.hidden = true; } });
+    markLinks();
+    if (restoreFocus && opener && $(opener + '-set')) { $(opener + '-set').focus(); }
+  }
+
   function goToGroup(id) {
     var box = $('messages-' + id);
     var g = MESSAGE_GROUPS.filter(function (x) { return x.id === id; })[0];
     if (!box || !g) { return; }
-    box.scrollIntoView({ block: 'start' });
+    MESSAGE_GROUPS.forEach(function (x) { $('messages-' + x.id).hidden = x.id !== id; $('messages-' + x.id).classList.remove('flash'); });
+    openGroup = id;
+    $('messages').hidden = false;
+    markLinks();
+    $('messages').scrollIntoView({ block: 'start' });
     $('f-' + g.fields[0].key).focus();
     box.classList.add('flash');
-    setTimeout(function () { box.classList.remove('flash'); }, 1800);
+    if (flashTimer) { clearTimeout(flashTimer); }
+    flashTimer = setTimeout(function () { box.classList.remove('flash'); }, 1800);
   }
 
   ['status', 'queue', 'role'].forEach(function (id) {

@@ -68,3 +68,5 @@ h3 { font-size: 1.05rem; margin: 0 0 4px; }
 
 .group .error:empty { min-height: 0; margin: 0; }
 .group input + .error:not(:empty) { margin: 6px 0 10px; }
+.card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.card-head button { flex: none; }
