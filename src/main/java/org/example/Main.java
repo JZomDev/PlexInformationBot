@@ -37,6 +37,12 @@ public class Main
 		JAVAPLEX_LOGGER.setLevel(Level.WARNING);
 	}
 
+	/** A taken web port must not take down a bot that is already configured; with no token there is nothing to run. */
+	static boolean continueWithoutSetupPage(Settings effective)
+	{
+		return !effective.botToken().isEmpty();
+	}
+
 	/**
 	 * The entrance point of our program.
 	 *
@@ -82,8 +88,15 @@ public class Main
 		}
 		catch (Exception e)
 		{
-			logger.error("Could not start the setup page on port {}: {}", port, e.getMessage());
-			System.exit(1);
+			logger.error("Could not start the setup page on port {} ({}). Is the port already in use?", port,
+				e.getClass().getSimpleName());
+			if (!continueWithoutSetupPage(settings.effective()))
+			{
+				System.exit(1);
+				return;
+			}
+			logger.warn("Starting the bot without the setup page.");
+			application.restart(settings.effective());
 			return;
 		}
 		logger.info("Setup page is listening on port {}", port);

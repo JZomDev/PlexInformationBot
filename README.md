@@ -30,6 +30,8 @@ The setup page listens on 4546. To use another port, set `WEB_PORT` and map the 
 docker run -d --name plexinfobot -e WEB_PORT=8080 -p 8080:8080 -v "$(pwd)/config:/config" redzguilt/plexinfobot
 ```
 
+If the port is already taken, the bot still starts when a Discord token is configured, but without the setup page (check the log for the bind error). With no token configured it exits with an error, since there would be nothing to run.
+
 `WEB_PORT` is the only environment setting a new install needs. `CONFIG_DIR` (default `/config`) can move the config folder but you normally do not need it.
 
 ## Unraid
