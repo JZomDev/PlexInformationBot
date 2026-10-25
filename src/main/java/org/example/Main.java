@@ -90,6 +90,7 @@ public class Main
 		{
 			logger.error("Could not start the setup page on port {} ({}). Is the port already in use?", port,
 				e.getClass().getSimpleName());
+			logger.info("Setup page unavailable on port {}; continuing without it", port);
 			if (!continueWithoutSetupPage(settings.effective()))
 			{
 				System.exit(1);
@@ -97,6 +98,7 @@ public class Main
 			}
 			logger.warn("Starting the bot without the setup page.");
 			application.restart(settings.effective());
+			holdProcessOpen();
 			return;
 		}
 		logger.info("Setup page is listening on port {}", port);
@@ -108,5 +110,18 @@ public class Main
 			return;
 		}
 		application.restart(effective);
+		holdProcessOpen();
+	}
+
+	private static void holdProcessOpen()
+	{
+		try
+		{
+			new KeepAlive().await();
+		}
+		catch (InterruptedException e)
+		{
+			Thread.currentThread().interrupt();
+		}
 	}
 }
