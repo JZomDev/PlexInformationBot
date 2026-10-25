@@ -119,4 +119,53 @@ class SettingsStoreTest
 		assertEquals(s, reread.effective());
 		assertTrue(reread.loadWarning().isEmpty());
 	}
+
+	@Test
+	void concurrentUpdatesBothSurvive() throws Exception
+	{
+		for (int i = 0; i < 100; i++)
+		{
+			SettingsStore store = new SettingsStore(tmp.resolve("r" + i), Map.of());
+			java.util.concurrent.CyclicBarrier barrier = new java.util.concurrent.CyclicBarrier(2);
+			Thread a = new Thread(() -> run(barrier, () -> store.update(s -> with(s, "tok", s.plexIp(), s.plexPort()))));
+			Thread b = new Thread(() -> run(barrier, () -> store.update(s -> with(s, s.botToken(), "ip", s.plexPort()))));
+			a.start();
+			b.start();
+			a.join();
+			b.join();
+			assertEquals("tok", store.fileValues().botToken());
+			assertEquals("ip", store.fileValues().plexIp());
+			assertEquals(store.fileValues(), new SettingsStore(tmp.resolve("r" + i), Map.of()).fileValues());
+		}
+	}
+
+	private interface Action
+	{
+		void run() throws Exception;
+	}
+
+	private static void run(java.util.concurrent.CyclicBarrier barrier, Action action)
+	{
+		try
+		{
+			barrier.await();
+			action.run();
+		}
+		catch (Exception e)
+		{
+			throw new RuntimeException(e);
+		}
+	}
+
+	@Test
+	void failedUpdateLeavesStateUnchanged() throws IOException
+	{
+		Path file = Files.writeString(tmp.resolve("afile"), "x");
+		SettingsStore store = new SettingsStore(file.resolve("sub"), Map.of());
+		Settings before = store.fileValues();
+		Settings effectiveBefore = store.effective();
+		assertThrows(IOException.class, () -> store.update(s -> with(s, "tok", "ip", "1")));
+		assertEquals(before, store.fileValues());
+		assertEquals(effectiveBefore, store.effective());
+	}
 }

@@ -115,7 +115,10 @@ public class SetupCommandsListener implements SlashCommandCreateListener
 		}
 		try
 		{
-			store.save(apply(store.fileValues(), command, channel.get().getIdAsString(), message.getIdAsString(), roleId));
+			String channelId = channel.get().getIdAsString();
+			String messageId = message.getIdAsString();
+			String role = roleId;
+			store.update(saved -> apply(saved, command, channelId, messageId, role));
 			AppConfig.reload();
 		}
 		catch (IOException e)

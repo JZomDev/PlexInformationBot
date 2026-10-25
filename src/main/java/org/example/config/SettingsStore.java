@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.UnaryOperator;
 
 public class SettingsStore
 {
@@ -75,5 +76,13 @@ public class SettingsStore
 		Files.move(tmp, dir.resolve(FILE_NAME), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
 		this.fileValues = values;
 		this.current = envSettings.overlay(values);
+	}
+
+	/** Reads, changes and writes the file values under one lock; state changes only after a successful write. */
+	public synchronized Settings update(UnaryOperator<Settings> change) throws IOException
+	{
+		Settings next = change.apply(fileValues);
+		save(next);
+		return next;
 	}
 }

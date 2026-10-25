@@ -349,9 +349,9 @@ public class WebServer
 	}
 
 	/** Keys absent from the body keep the saved value; present keys (even empty) replace it. */
-	private Settings withAbsentKept(JsonObject body)
+	private Settings withAbsentKept(JsonObject body, Settings saved)
 	{
-		JsonObject merged = HttpIo.GSON.toJsonTree(settings.fileValues()).getAsJsonObject();
+		JsonObject merged = HttpIo.GSON.toJsonTree(saved).getAsJsonObject();
 		for (Map.Entry<String, com.google.gson.JsonElement> entry : body.entrySet())
 		{
 			if (merged.has(entry.getKey()) && !entry.getValue().isJsonNull())
@@ -364,11 +364,15 @@ public class WebServer
 
 	private void putSettings(HttpExchange ex, SessionManager.Session s) throws Exception
 	{
-		Settings submitted;
+		JsonObject submitted;
 		try
 		{
 			JsonObject body = HttpIo.GSON.fromJson(HttpIo.readBody(ex), JsonObject.class);
-			submitted = body == null ? null : withAbsentKept(body);
+			if (body != null)
+			{
+				withAbsentKept(body, settings.fileValues());
+			}
+			submitted = body;
 		}
 		catch (JsonParseException | IllegalStateException e)
 		{
@@ -379,11 +383,12 @@ public class WebServer
 			HttpIo.sendError(ex, 400, "Invalid request");
 			return;
 		}
+		JsonObject form = submitted;
 		synchronized (saveLock)
 		{
 			try
 			{
-				settings.save(settings.fileValues().applyForm(submitted));
+				settings.update(saved -> saved.applyForm(withAbsentKept(form, saved)));
 			}
 			catch (IOException e)
 			{
