@@ -396,12 +396,28 @@
     else { w.textContent = ''; w.hidden = true; }
   }
 
+  function setItem(id, label, isSet) {
+    var el = $(id);
+    el.textContent = '';
+    if (!isSet) { el.textContent = label + ': not set'; return; }
+    el.appendChild(document.createTextNode(label));
+    var tick = document.createElement('span');
+    tick.className = 'tick';
+    tick.setAttribute('aria-hidden', 'true');
+    tick.textContent = ' \u2713';
+    el.appendChild(tick);
+    var sr = document.createElement('span');
+    sr.className = 'sr-only';
+    sr.textContent = ': set';
+    el.appendChild(sr);
+  }
+
   function renderStatus(d) {
     var label = STATE_LABELS[d.botState] || String(d.botState || 'unknown').toLowerCase();
     $('bot-state').textContent = 'Bot: ' + label;
-    $('status-set').textContent = 'Status message: ' + (d.statusSet ? 'set' : 'not set');
-    $('queue-set').textContent = 'Queue message: ' + (d.queueSet ? 'set' : 'not set');
-    $('role-set').textContent = 'Role message: ' + (d.roleSet ? 'set' : 'not set');
+    setItem('status-set', 'Status message', d.statusSet);
+    setItem('queue-set', 'Queue message', d.queueSet);
+    setItem('role-set', 'Role message', d.roleSet);
   }
 
   function setResult(node, ok, msg) {
