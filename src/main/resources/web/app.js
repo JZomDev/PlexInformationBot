@@ -236,7 +236,7 @@
       var box = el('div', { id: 'messages-' + g.id, 'class': 'group', role: 'group', 'aria-labelledby': 'h-' + g.id });
       box.appendChild(el('h3', { id: 'h-' + g.id, text: g.title }));
       box.appendChild(el('p', { 'class': 'help', text: g.help }));
-      box.appendChild(el('label', { 'for': 'link-' + g.id, text: 'Paste message link' }));
+      box.appendChild(el('label', { 'for': 'link-' + g.id, text: 'Paste message link (fills the channel and message ID below)' }));
       var link = el('input', { id: 'link-' + g.id, type: 'text', autocomplete: 'off', autocapitalize: 'off',
                                spellcheck: 'false', 'aria-describedby': 'link-error-' + g.id });
       box.appendChild(link);

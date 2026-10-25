@@ -65,3 +65,6 @@ h3 { font-size: 1.05rem; margin: 0 0 4px; }
   background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px;
   font: .8rem/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
+
+.group .error:empty { min-height: 0; margin: 0; }
+.group input + .error:not(:empty) { margin: 6px 0 10px; }
