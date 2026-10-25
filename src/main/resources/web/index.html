@@ -41,7 +41,7 @@
   </section>
 
   <div id="main-view" hidden>
-    <div class="topbar">
+    <section class="card topbar" aria-label="Bot status and tools">
       <div id="state-strip" class="strip" aria-live="polite">
         <span id="bot-state">Bot: ...</span>
         <a id="status-set" href="#messages-status" data-group="status">Status message: ...</a>
@@ -53,7 +53,7 @@
         <button id="logs-toggle" type="button" aria-expanded="false" aria-controls="logs-view">Logs</button>
         <button id="logout" type="button">Sign out</button>
       </div>
-    </div>
+    </section>
     <div id="warning" class="banner" role="alert" hidden></div>
     <section id="logs-view" class="card" aria-labelledby="h-logs" hidden>
       <h2 id="h-logs">Logs</h2>
