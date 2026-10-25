@@ -10,11 +10,11 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
-import java.text.SimpleDateFormat;
-import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -36,18 +36,21 @@ import static org.example.Main.TAUTULLI_URL;
 
 public class PlexInformationWorker
 {
+	public record InfoEmbed(EmbedBuilder embed, String signature)
+	{
+	}
+
 	private static final Logger log = LogManager.getLogger(PlexInformationWorker.class);
-	static SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+	private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 	NumberFormat numberFormat = new DecimalFormat("#0.00");
 	NumberFormat numberFormat2 = new DecimalFormat("#00");
 
-	public CompletableFuture<EmbedBuilder> execute(DiscordApi api, PlexMediaServer plexMediaServer, List<PlexMediatag<?>> mediatags)
+	public CompletableFuture<InfoEmbed> execute(DiscordApi api, PlexMediaServer plexMediaServer, List<PlexMediatag<?>> mediatags)
 	{
 		return CompletableFuture.supplyAsync(() -> {
 			EmbedBuilder embed = new EmbedBuilder();
 			String activtyTitle = "";
-			Instant time = Instant.now();
-			String updatedTime = formatter.format(Date.from(time));
+			String updatedTime = formatter.format(LocalDateTime.now());
 			StringBuilder stringBuilder = new StringBuilder();
 			if (mediatags == null || mediatags.isEmpty())
 			{
@@ -56,14 +59,15 @@ public class PlexInformationWorker
 			else
 			{
 				activtyTitle = "Current activity on " + plexMediaServer.getFriendlyName();
+				Map<String, String> friendlyNames = getFriendlyNames();
 				Long total_bandwidth = 0L;
 				for (int i = 0; i < mediatags.size(); i++)
 				{
 					PlexMediatag<?> plexMediatag = mediatags.get(i);
 					if (plexMediatag instanceof PlexEpisode plexEpisode) {
-						total_bandwidth += buildEpisodeString(stringBuilder, plexEpisode, i);
+						total_bandwidth += buildEpisodeString(stringBuilder, plexEpisode, i, friendlyNames);
 					} else if (plexMediatag instanceof PlexMovie plexMovie) {
-						total_bandwidth += buildMovieString(stringBuilder, plexMovie, i);
+						total_bandwidth += buildMovieString(stringBuilder, plexMovie, i, friendlyNames);
 					}
 				}
 
@@ -77,24 +81,17 @@ public class PlexInformationWorker
 			embed.setTitle(activtyTitle);
 			embed.setFooter("Updated " + updatedTime);
 			embed.setAuthor(api.getYourself());
-			return embed;
+			return new InfoEmbed(embed, activtyTitle + "\n" + stringBuilder);
 
 		}, api.getThreadPool().getExecutorService());
 	}
 
-	private long buildEpisodeString(StringBuilder stringBuilder, PlexEpisode episode, int index) {
+	private long buildEpisodeString(StringBuilder stringBuilder, PlexEpisode episode, int index, Map<String, String> friendlyNames) {
 		PlexPlayer player = episode.getPlayer();
 		PlexSeason season = episode.parent();
 		String userID = episode.getUser().getId();
 		String username = episode.getUser().getTitle();
-		String friendlyName = "";
-		if (!TAUTULLI_URL.isEmpty()) {
-			try {
-				friendlyName = getUsers().getOrDefault(userID, "");
-			} catch (Exception e) {
-				log.error(e);
-			}
-		}
+		String friendlyName = friendlyNames.getOrDefault(userID, "");
 
 		long bandwidth = 0;
 		if (episode.getSession() == null)
@@ -119,7 +116,8 @@ public class PlexInformationWorker
 
 		long bitrate = 0;
 		for (PlexMedia pm : episode.getMedia())
-			bitrate += pm.getBitrate();{
+		{
+			bitrate += pm.getBitrate();
 		}
 
 		String qualityProfile = getQualityProfile(bandwidth, bitrate);
@@ -140,18 +138,11 @@ public class PlexInformationWorker
 		return bandwidth;
 	}
 
-	private long buildMovieString(StringBuilder stringBuilder, PlexMovie movie, int index) {
+	private long buildMovieString(StringBuilder stringBuilder, PlexMovie movie, int index, Map<String, String> friendlyNames) {
 		PlexPlayer player = movie.getPlayer();
 		String userID = movie.getUser().getId();
 		String username = movie.getUser().getTitle();
-		String friendlyName = "";
-		if (!TAUTULLI_URL.isEmpty()) {
-			try {
-				friendlyName = getUsers().getOrDefault(userID, "");
-			} catch (Exception e) {
-				log.error(e);
-			}
-		}
+		String friendlyName = friendlyNames.getOrDefault(userID, "");
 		long bandwidth = 0;
 		if (movie.getSession() == null)
 		{
@@ -211,6 +202,23 @@ public class PlexInformationWorker
 		builder.append(":alarm_clock: ").append(elapsedStr).append(" / ").append(totalStr);
 	}
 
+	private Map<String, String> getFriendlyNames()
+	{
+		if (TAUTULLI_URL.isEmpty())
+		{
+			return Map.of();
+		}
+		try
+		{
+			return getUsers();
+		}
+		catch (Exception e)
+		{
+			log.error(e);
+			return Map.of();
+		}
+	}
+
 	private HashMap<String, String> getUsers() throws Exception
 	{
 		HashMap<String, String> mappedUsers = new HashMap<>();
@@ -221,6 +229,8 @@ public class PlexInformationWorker
 		String urlStr = "http://" + tautulliURL + "/api/v2?apikey=" + apikey + "&cmd=get_activity";
 		URL url = new URL(urlStr);
 		URLConnection request = url.openConnection();
+		request.setConnectTimeout(5000);
+		request.setReadTimeout(5000);
 		request.connect();
 
 		JsonElement root = JsonParser.parseReader(new InputStreamReader((InputStream) request.getContent())); //Convert the input stream to a json element
