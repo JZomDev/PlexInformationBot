@@ -5,8 +5,10 @@ A Discord bot that shows what your Plex server is doing: the number of people wa
 ## Quick start with Docker
 
 ```
-docker run -d --name plexinfobot -p 4546:4546 -v ./config:/config redzguilt/plexinfobot
+docker run -d --name plexinfobot -p 4546:4546 -v "$(pwd)/config:/config" redzguilt/plexinfobot
 ```
+
+Instead of the `config` folder you can use a named volume, for example `-v plexinfobot-config:/config`.
 
 1. Open http://localhost:4546.
 2. Sign in with `admin` / `admin`. You are asked to choose your own username and password straight away (at least 8 characters).
@@ -25,7 +27,7 @@ docker run -d --name plexinfobot -p 4546:4546 -v ./config:/config redzguilt/plex
 The setup page listens on 4546. To use another port, set `WEB_PORT` and map the same port:
 
 ```
-docker run -d --name plexinfobot -e WEB_PORT=8080 -p 8080:8080 -v ./config:/config redzguilt/plexinfobot
+docker run -d --name plexinfobot -e WEB_PORT=8080 -p 8080:8080 -v "$(pwd)/config:/config" redzguilt/plexinfobot
 ```
 
 `WEB_PORT` is the only environment setting a new install needs. `CONFIG_DIR` (default `/config`) can move the config folder but you normally do not need it.
