@@ -23,6 +23,8 @@ import java.util.concurrent.Executors;
 public class WebServer
 {
 	private static final String COOKIE = "sid";
+	private static final String TEST_PREFIX = "/api/test/";
+	private static final List<String> TEST_SECTIONS = List.of("discord", "plex", "tautulli", "radarr", "sonarr");
 
 	private interface Route
 	{
@@ -38,6 +40,7 @@ public class WebServer
 	private final CredentialStore credentials;
 	private final SessionManager sessions;
 	private final LoginThrottle throttle;
+	private final ConnectionChecks checks;
 	private final BotController bot;
 	private final Map<String, Api> routes = new LinkedHashMap<>();
 	private final Object saveLock = new Object();
@@ -45,13 +48,14 @@ public class WebServer
 	private ExecutorService executor;
 
 	public WebServer(int port, SettingsStore settings, CredentialStore credentials, SessionManager sessions,
-					 LoginThrottle throttle, BotController bot)
+					 LoginThrottle throttle, ConnectionChecks checks, BotController bot)
 	{
 		this.requestedPort = port;
 		this.settings = settings;
 		this.credentials = credentials;
 		this.sessions = sessions;
 		this.throttle = throttle;
+		this.checks = checks;
 		this.bot = bot;
 		routes.put("/api/session", new Api("GET", false, true, this::session));
 		routes.put("/api/login", new Api("POST", false, true, (ex, s) -> login(ex)));
@@ -125,7 +129,7 @@ public class WebServer
 	private void api(HttpExchange ex, String path) throws Exception
 	{
 		Api api = path.equals("/api/settings") && "PUT".equals(ex.getRequestMethod())
-				? new Api("PUT", true, false, this::putSettings) : routes.get(path);
+				? new Api("PUT", true, false, this::putSettings) : routeFor(path);
 		if (api == null)
 		{
 			HttpIo.sendError(ex, 404, "Not found");
@@ -157,8 +161,23 @@ public class WebServer
 		api.route().handle(ex, session);
 	}
 
+	private Api routeFor(String path)
+	{
+		if (path.startsWith(TEST_PREFIX))
+		{
+			String section = path.substring(TEST_PREFIX.length());
+			return TEST_SECTIONS.contains(section)
+					? new Api("POST", true, false, (ex, s) -> test(ex, section)) : null;
+		}
+		return routes.get(path);
+	}
+
 	private String allowed(String path)
 	{
+		if (path.startsWith(TEST_PREFIX))
+		{
+			return "POST";
+		}
 		return path.equals("/api/settings") ? "GET, PUT" : routes.get(path).method();
 	}
 
@@ -382,6 +401,37 @@ public class WebServer
 			}
 		}
 		HttpIo.sendJson(ex, 200, Map.of("ok", true));
+	}
+
+	/** A submitted field that is absent or the mask is resolved from the saved effective settings. */
+	private static String field(JsonObject in, String key, String saved, boolean secret)
+	{
+		String v = str(in, key);
+		return v == null || (secret && Settings.MASK.equals(v)) ? saved : v;
+	}
+
+	private void test(HttpExchange ex, String section) throws Exception
+	{
+		JsonObject in = parseObject(ex);
+		if (in == null)
+		{
+			HttpIo.sendError(ex, 400, "Invalid request");
+			return;
+		}
+		Settings e = settings.effective();
+		CheckResult result = switch (section)
+		{
+			case "discord" -> checks.discord(field(in, "botToken", e.botToken(), true));
+			case "plex" -> checks.plex(field(in, "plexIp", e.plexIp(), false), field(in, "plexPort", e.plexPort(), false),
+					field(in, "plexToken", e.plexToken(), true));
+			case "tautulli" -> checks.tautulli(field(in, "tautulliUrl", e.tautulliUrl(), false),
+					field(in, "tautulliApiKey", e.tautulliApiKey(), true));
+			case "radarr" -> checks.radarr(field(in, "radarrUrl", e.radarrUrl(), false),
+					field(in, "radarrApiKey", e.radarrApiKey(), true));
+			default -> checks.sonarr(field(in, "sonarrUrl", e.sonarrUrl(), false),
+					field(in, "sonarrApiKey", e.sonarrApiKey(), true));
+		};
+		HttpIo.sendJson(ex, 200, Map.of("ok", result.ok(), "message", result.message()));
 	}
 
 	private void status(HttpExchange ex, SessionManager.Session s) throws IOException

@@ -52,6 +52,37 @@ class WebServerTest
 		}
 	}
 
+	private static final class FakeChecks extends ConnectionChecks
+	{
+		final List<String> calls = new ArrayList<>();
+
+		FakeChecks()
+		{
+			super(HttpClient.newHttpClient(), t -> new CheckResult(true, "unused"));
+		}
+
+		@Override
+		public CheckResult plex(String ip, String port, String token)
+		{
+			calls.add("plex|" + ip + "|" + port + "|" + token);
+			return new CheckResult(true, "Plex fine");
+		}
+
+		@Override
+		public CheckResult radarr(String url, String key)
+		{
+			calls.add("radarr|" + url + "|" + key);
+			return new CheckResult(false, "Rejected: check the key");
+		}
+
+		@Override
+		public CheckResult discord(String token)
+		{
+			calls.add("discord|" + token);
+			return new CheckResult(true, "ok");
+		}
+	}
+
 	private record Res(int status, String body, HttpResponse<String> raw)
 	{
 		JsonObject json()
@@ -74,6 +105,7 @@ class WebServerTest
 	private SettingsStore settings;
 	private CredentialStore credentials;
 	private FakeBot bot;
+	private FakeChecks checks;
 	private WebServer server;
 	private HttpClient http;
 	private Path configDir;
@@ -94,8 +126,9 @@ class WebServerTest
 		settings = store;
 		credentials = new CredentialStore(configDir);
 		bot = new FakeBot();
+		checks = new FakeChecks();
 		MutableClock clock = new MutableClock();
-		server = new WebServer(0, settings, credentials, new SessionManager(clock), new LoginThrottle(clock), bot);
+		server = new WebServer(0, settings, credentials, new SessionManager(clock), new LoginThrottle(clock), checks, bot);
 		server.start();
 		http = HttpClient.newHttpClient();
 	}
@@ -466,5 +499,44 @@ class WebServerTest
 			assertFalse(resp.contains("Configuration"), t + " leaked a resource");
 			assertFalse(resp.startsWith("HTTP/1.1 200"), t + " returned 200: " + resp);
 		}
+	}
+
+	@Test
+	void testRouteResolvesMaskedSecretsFromSavedSettings() throws Exception
+	{
+		start(new SettingsStore(configDir, Map.of("PLEX_KEY", "env-plex-key", "RADARR_API", "env-radarr")));
+		Client c = loggedInReady();
+		Res r = call("POST", "/api/test/plex", "{\"plexIp\":\"1.2.3.4\",\"plexPort\":\"32400\",\"plexToken\":\"********\"}", c);
+		assertEquals(200, r.status(), r.body());
+		assertTrue(r.json().get("ok").getAsBoolean());
+		assertEquals("Plex fine", r.json().get("message").getAsString());
+		assertEquals("plex|1.2.3.4|32400|env-plex-key", checks.calls.get(0));
+		r = call("POST", "/api/test/radarr", "{\"radarrUrl\":\"h:1\"}", c);
+		assertEquals(200, r.status());
+		assertFalse(r.json().get("ok").getAsBoolean());
+		assertEquals("radarr|h:1|env-radarr", checks.calls.get(1));
+		call("POST", "/api/test/discord", "{\"botToken\":\"typed-token\"}", c);
+		assertEquals("discord|typed-token", checks.calls.get(2));
+	}
+
+	@Test
+	void testRouteUnknownSectionIs404AndNeedsSessionAndCsrf() throws Exception
+	{
+		Client c = loggedInReady();
+		assertEquals(404, call("POST", "/api/test/bogus", "{}", c).status());
+		assertEquals(401, call("POST", "/api/test/plex", "{}", null).status());
+		Client noCsrf = new Client();
+		noCsrf.sid = c.sid;
+		assertEquals(403, call("POST", "/api/test/plex", "{}", noCsrf).status());
+		assertEquals(405, call("GET", "/api/test/plex", null, c).status());
+		assertTrue(checks.calls.isEmpty());
+	}
+
+	@Test
+	void testRouteIsBlockedUntilCredentialsChanged() throws Exception
+	{
+		Client c = login("admin", "admin");
+		assertEquals(403, call("POST", "/api/test/plex", "{}", c).status());
+		assertTrue(checks.calls.isEmpty());
 	}
 }
