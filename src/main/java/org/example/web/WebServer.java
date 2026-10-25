@@ -454,6 +454,7 @@ public class WebServer
 			try
 			{
 				settings.update(saved -> saved.applyForm(withAbsentKept(form, saved)).trimmedIds().normalisedHosts());
+				health.settingsChanged();
 			}
 			catch (IOException e)
 			{

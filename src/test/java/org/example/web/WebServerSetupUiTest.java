@@ -34,6 +34,7 @@ class WebServerSetupUiTest
 	private WebServer server;
 	private HttpClient http;
 	private String sid;
+	private String csrf;
 	private volatile boolean registered;
 
 	@AfterEach
@@ -43,6 +44,11 @@ class WebServerSetupUiTest
 	}
 
 	private void start(Map<String, String> env) throws Exception
+	{
+		start(env, new ConnectionChecks(HttpClient.newHttpClient(), t -> new CheckResult(true, "x")));
+	}
+
+	private void start(Map<String, String> env, ConnectionChecks checks) throws Exception
 	{
 		BotController bot = new BotController()
 		{
@@ -65,7 +71,7 @@ class WebServerSetupUiTest
 		};
 		MutableClock clock = new MutableClock();
 		server = new WebServer(0, new SettingsStore(tmp, env), new CredentialStore(tmp), new SessionManager(clock),
-				new LoginThrottle(clock), new ConnectionChecks(HttpClient.newHttpClient(), t -> new CheckResult(true, "x")),
+				new LoginThrottle(clock), checks,
 				bot, (c, m) -> new CheckResult(true, "x"));
 		server.start();
 		http = HttpClient.newHttpClient();
@@ -88,13 +94,77 @@ class WebServerSetupUiTest
 		HttpResponse<String> r = http.send(login, HttpResponse.BodyHandlers.ofString());
 		String c = r.headers().firstValue("Set-Cookie").orElseThrow();
 		sid = c.substring(4, c.indexOf(';'));
-		String csrf = GSON.fromJson(r.body(), JsonObject.class).get("csrf").getAsString();
+		String loginCsrf = GSON.fromJson(r.body(), JsonObject.class).get("csrf").getAsString();
 		HttpRequest change = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + server.port() + "/api/credentials"))
-				.header("Cookie", "sid=" + sid).header("X-CSRF-Token", csrf)
+				.header("Cookie", "sid=" + sid).header("X-CSRF-Token", loginCsrf)
 				.POST(HttpRequest.BodyPublishers.ofString("{\"username\":\"owner\",\"password\":\"correct horse\"}")).build();
 		r = http.send(change, HttpResponse.BodyHandlers.ofString());
 		c = r.headers().firstValue("Set-Cookie").orElseThrow();
 		sid = c.substring(4, c.indexOf(';'));
+		csrf = GSON.fromJson(r.body(), JsonObject.class).get("csrf").getAsString();
+	}
+
+	private HttpResponse<String> put(String path, String json) throws Exception
+	{
+		HttpRequest req = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + server.port() + path))
+				.header("Cookie", "sid=" + sid).header("X-CSRF-Token", csrf)
+				.PUT(HttpRequest.BodyPublishers.ofString(json)).build();
+		return http.send(req, HttpResponse.BodyHandlers.ofString());
+	}
+
+	@Test
+	void savingNewPlexSettingsRefreshesHealthEvenWhileAnOldCheckHangs() throws Exception
+	{
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		java.util.concurrent.CountDownLatch oldStarted = new java.util.concurrent.CountDownLatch(1);
+		java.util.concurrent.CountDownLatch newStarted = new java.util.concurrent.CountDownLatch(1);
+		start(Map.of(), new ConnectionChecks(HttpClient.newHttpClient(), t -> new CheckResult(true, "x"))
+		{
+			@Override
+			public CheckResult plex(String ip, String port, String token)
+			{
+				if (ip.equals("10.0.0.1"))
+				{
+					oldStarted.countDown();
+					try
+					{
+						release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+					}
+					catch (InterruptedException e)
+					{
+						Thread.currentThread().interrupt();
+					}
+				}
+				else
+				{
+					newStarted.countDown();
+				}
+				return new CheckResult(true, "host " + ip);
+			}
+		});
+		ready();
+		String old = "{\"plexIp\":\"10.0.0.1\",\"plexPort\":\"32400\",\"plexToken\":\"tok\"}";
+		assertEquals(200, put("/api/settings", old).statusCode());
+		get("/api/health?refresh=1", true);
+		assertTrue(oldStarted.await(5, java.util.concurrent.TimeUnit.SECONDS));
+
+		String fresh = "{\"plexIp\":\"10.0.0.2\",\"plexPort\":\"32400\",\"plexToken\":\"tok\"}";
+		assertEquals(200, put("/api/settings", fresh).statusCode());
+		get("/api/health?refresh=1", true);
+		assertTrue(newStarted.await(5, java.util.concurrent.TimeUnit.SECONDS), "new settings must be checked at once");
+
+		release.countDown();
+		String message = "";
+		for (int i = 0; i < 50 && !message.equals("host 10.0.0.2"); i++)
+		{
+			Thread.sleep(100);
+			message = GSON.fromJson(get("/api/health", true).body(), JsonObject.class)
+					.getAsJsonObject("plex").get("message").getAsString();
+		}
+		assertEquals("host 10.0.0.2", message);
+		Thread.sleep(200);
+		assertEquals("host 10.0.0.2", GSON.fromJson(get("/api/health", true).body(), JsonObject.class)
+				.getAsJsonObject("plex").get("message").getAsString());
 	}
 
 	@Test
