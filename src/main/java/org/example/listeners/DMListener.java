@@ -1,11 +1,10 @@
 package org.example.listeners;
 
-import java.sql.Date;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import kekolab.javaplex.PlexMediaServer;
 import kekolab.javaplex.PlexServer;
@@ -15,22 +14,50 @@ import org.javacord.api.listener.message.MessageCreateListener;
 
 public class DMListener implements MessageCreateListener
 {
+	private static final ScheduledExecutorService TIMEOUT_SCHEDULER = Executors.newSingleThreadScheduledExecutor(r -> {
+		Thread thread = new Thread(r, "dm-listener-timeout");
+		thread.setDaemon(true);
+		return thread;
+	});
+
 	DiscordApi api;
 	long userID;
 	PlexMediaServer plexMediaServer;
-	Timer timer;
+	private final ScheduledFuture<?> timeout;
+	private final Runnable onDone;
 
 	public String VALID_EMAIL_ADDRESS_REGEX = "^(?=.{1,64}@)[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*@"
 		+ "[^-][A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*(\\.[A-Za-z]{2,})$";
 	public Pattern PATTERN_MATCH = Pattern.compile(VALID_EMAIL_ADDRESS_REGEX, Pattern.CASE_INSENSITIVE);
 
-	public DMListener(DiscordApi api, long userID, PlexMediaServer plexMediaServer)
+	public DMListener(DiscordApi api, long userID, PlexMediaServer plexMediaServer, Runnable onDone)
 	{
 		this.api = api;
 		this.userID = userID;
 		this.plexMediaServer = plexMediaServer;
-		timer = new Timer();
-		timer.schedule(new StopListener(this), Date.from(Instant.now().plus(86400, ChronoUnit.SECONDS)));
+		this.onDone = onDone;
+		timeout = TIMEOUT_SCHEDULER.schedule(this::onTimeout, 24, TimeUnit.HOURS);
+	}
+
+	public long getUserID()
+	{
+		return userID;
+	}
+
+	/** Cancels the pending timeout and detaches this listener from the api. */
+	public void stop()
+	{
+		timeout.cancel(false);
+		api.removeListener(this);
+		onDone.run();
+	}
+
+	private void onTimeout()
+	{
+		api.removeListener(this);
+		onDone.run();
+		api.getUserById(userID).thenAccept(user ->
+			user.sendMessage("Timed Out. Message Server Admin with your email so They Can Add You Manually."));
 	}
 
 	@Override
@@ -41,7 +68,7 @@ public class DMListener implements MessageCreateListener
 			return;
 		}
 
-		if(event.getMessageAuthor().getId() == api.getYourself().getId())
+		if (event.getMessageAuthor().getId() != userID)
 		{
 			return;
 		}
@@ -62,9 +89,8 @@ public class DMListener implements MessageCreateListener
 				event.getChannel().sendMessage("There was an error adding this email address. Message Server Admin.");
             }
 			// remove listener and cancel timer when plex invite attempted
-            event.getApi().removeListener(this);
-            timer.cancel();
-        }
+			stop();
+		}
 		else
 		{
 			event.getChannel().sendMessage("Invalid email. Please just type in your email and nothing else.");
@@ -91,25 +117,5 @@ public class DMListener implements MessageCreateListener
 	private boolean validEmail(String emailAddress)
 	{
 		return PATTERN_MATCH.matcher(emailAddress).matches();
-	}
-
-	class StopListener extends TimerTask
-	{
-		DMListener dmListener;
-
-		public StopListener(DMListener dmListener)
-		{
-			this.dmListener = dmListener;
-		}
-
-		@Override
-		public void run()
-		{
-			if (dmListener != null)
-			{
-				api.removeListener(dmListener);
-				api.getUserById(userID).join().sendMessage("Timed Out. Message Server Admin with your email so They Can Add You Manually.");
-			}
-		}
 	}
 }
