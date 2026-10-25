@@ -59,6 +59,7 @@ public class Main
 			.connectTimeout(Duration.ofSeconds(5))
 			.build();
 		Application application = new Application();
+		application.setSettingsStore(settings);
 		WebServer web = new WebServer(port, settings, new CredentialStore(configDir),
 			new SessionManager(Clock.systemUTC()), new LoginThrottle(Clock.systemUTC()),
 			new ConnectionChecks(http, new JavacordDiscordProbe()), application);

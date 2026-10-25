@@ -33,6 +33,11 @@ import org.example.bot.BotController;
 import org.example.bot.BotLifecycle;
 import org.example.bot.BotState;
 import org.example.config.AppConfig;
+import org.example.config.SettingsStore;
+import org.example.listeners.SetupCommandsListener;
+import org.javacord.api.entity.server.Server;
+import org.javacord.api.event.server.ServerBecomesAvailableEvent;
+import org.javacord.api.event.server.ServerJoinEvent;
 import org.example.config.Settings;
 import org.example.listeners.MessageListener;
 import org.example.listeners.PlexListener;
@@ -53,6 +58,7 @@ public class Application implements BotController
 	private final Logger logger = LogManager.getLogger(Application.class);
 
 	private final BotLifecycle lifecycle = new BotLifecycle(this::connect);
+	private volatile SettingsStore settingsStore;
 	private PlexMediaServer plexMediaServer;
 	private PlexApi plexApi;
 	private static final long SESSION_CACHE_MS = 2000;
@@ -60,6 +66,21 @@ public class Application implements BotController
 	private List<PlexMediatag<?>> cachedSessions;
 	private long cachedSessionsAt;
 	private final AtomicBoolean queueEmbedTaskRunning = new AtomicBoolean(false);
+
+	/** Lets the setup slash commands save the message IDs they create. */
+	public void setSettingsStore(SettingsStore store)
+	{
+		this.settingsStore = store;
+	}
+
+	private void registerSetupCommands(DiscordApi api, Server server)
+	{
+		api.bulkOverwriteServerApplicationCommands(server, new SlashCommandsSetUp().getSetupCommands())
+			.exceptionally(e -> {
+				logger.warn("Could not register setup commands for a server: {}", e.getClass().getSimpleName());
+				return null;
+			});
+	}
 
 	@Override
 	public void restart(Settings effective)
@@ -100,6 +121,8 @@ public class Application implements BotController
 		builder.setWaitForServersOnStartup(false);
 		builder.setWaitForUsersOnStartup(false);
 		builder.addServerBecomesAvailableListener(new ServerBecomesAvailable());
+		builder.addServerBecomesAvailableListener((ServerBecomesAvailableEvent e) -> registerSetupCommands(e.getApi(), e.getServer()));
+		builder.addServerJoinListener((ServerJoinEvent e) -> registerSetupCommands(e.getApi(), e.getServer()));
 		builder.addListener(new ReactListener());
 		builder.addListener(new MessageListener());
 		builder.addListener(new RoleListener(this::getServer));
@@ -112,6 +135,15 @@ public class Application implements BotController
 
 			api.bulkOverwriteGlobalApplicationCommands(slashCommandsSetUp.getCommands());
 			api.addSlashCommandCreateListener(new PlexListener(getServer(), this));
+			SettingsStore store = settingsStore;
+			if (store != null)
+			{
+				api.addSlashCommandCreateListener(new SetupCommandsListener(store));
+			}
+			for (Server joined : api.getServers())
+			{
+				registerSetupCommands(api, joined);
+			}
 			service = launchScheduledExecutor(api);
 		}
 		catch (Throwable e)

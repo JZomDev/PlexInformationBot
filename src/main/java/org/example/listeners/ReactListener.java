@@ -5,6 +5,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.example.Main;
 import org.example.config.AppConfig;
+import org.example.config.Settings;
 import org.javacord.api.entity.emoji.Emoji;
 import org.javacord.api.entity.message.Message;
 import org.javacord.api.entity.permission.Role;
@@ -74,16 +75,21 @@ public class ReactListener implements ReactionAddListener, ReactionRemoveListene
 		return false;
 	}
 
+	public static boolean matchesRoleMessage(Settings s, long authorId, long botId, long messageId, String content)
+	{
+		if (!s.roleMessageId().isEmpty() && s.roleMessageId().equals(Long.toString(messageId)))
+		{
+			return true;
+		}
+		return authorId == botId && Main.DISCORD_MESSAGE.equals(content);
+	}
+
 	private boolean isCorrectMessage(SingleReactionEvent event)
 	{
 		long botUserID = event.getApi().getYourself().getId();
-		long messageID = event.getMessageAuthor().get().getId();
-		if (botUserID != messageID)
-		{
-			return false;
-		}
-		String messageContent = event.getMessageContent().get();
-		return messageContent.equals(Main.DISCORD_MESSAGE);
+		long authorID = event.getMessageAuthor().map(a -> a.getId()).orElse(0L);
+		String messageContent = event.getMessageContent().orElse("");
+		return matchesRoleMessage(AppConfig.get(), authorID, botUserID, event.getMessageId(), messageContent);
 	}
 
 	private boolean isBotUser(SingleReactionEvent event)
