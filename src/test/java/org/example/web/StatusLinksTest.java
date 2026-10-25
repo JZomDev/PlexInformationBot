@@ -32,17 +32,27 @@ class StatusLinksTest
 	}
 
 	@Test
-	void messagesCardIsHiddenUntilALinkOpensOneGroup() throws Exception
+	void messagesOpenInAModalDialogOneGroupAtATime() throws Exception
 	{
 		String js = resource("app.js");
-		assertFalse(js.contains("id: 'messages', 'class': 'card adv-only'"));
+		String css = resource("style.css");
+		assertFalse(js.contains("scrollIntoView"));
+		assertFalse(js.contains("flash"));
+		assertTrue(js.contains("el('dialog', { id: 'messages'"));
+		assertTrue(js.contains("dlg.showModal()"));
 		assertTrue(js.contains("'aria-labelledby': 'h-messages', hidden: ''"));
-		assertTrue(js.contains("'aria-labelledby': 'h-' + g.id, hidden: ''"));
 		assertTrue(js.contains("$('messages-' + x.id).hidden = x.id !== id"));
+		assertTrue(js.contains("$('h-messages').textContent = g.title"));
 		assertTrue(js.contains("id: 'messages-close'"));
-		assertTrue(js.contains("ev.key === 'Escape'"));
+		assertTrue(js.contains("id: 'messages-save'"));
+		assertTrue(js.contains("saveSettings(true)"));
+		assertTrue(js.contains("addEventListener('cancel'"));
+		assertTrue(js.contains("ev.target === dlg"));
 		assertTrue(js.contains("'aria-expanded'"));
 		assertTrue(js.contains("if (!advanced) { closeMessages(false); }"));
 		assertTrue(js.contains("$(opener + '-set').focus()"));
+		assertTrue(css.contains("html.modal-open"));
+		assertTrue(css.contains("dialog#messages::backdrop"));
+		assertTrue(css.contains("max-height: 90vh"));
 	}
 }

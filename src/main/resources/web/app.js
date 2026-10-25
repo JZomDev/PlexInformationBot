@@ -24,22 +24,20 @@
       fields: [{ key: 'sonarrUrl', label: 'Sonarr host:port' },
                { key: 'sonarrApiKey', label: 'Sonarr API key', secret: true }] }
   ];
-  var MESSAGE_INTRO = 'Normally the /setupstatus, /setupcontentqueue and /setupreact commands fill these in. '
-    + 'To keep using an existing message the bot already wrote, paste its IDs here. '
-    + 'In Discord turn on Developer Mode (User Settings, Advanced), right-click the message and choose '
-    + 'Copy Message Link. The link ends with .../channelId/messageId. '
-    + 'The role ID is under Server Settings, Roles: right-click the role and choose Copy Role ID.';
+  var COPY_HELP = ' To keep using an existing message, turn on Developer Mode in Discord (User Settings, Advanced), '
+    + 'right-click the message and choose Copy Message Link, then paste it below.';
   var MESSAGE_GROUPS = [
     { id: 'status', title: 'Status message', channelKey: 'statusChannelId', messageKey: 'statusMessageId',
-      help: 'The live activity message the bot keeps editing. It must have been written by this bot.',
+      help: 'The live activity message the bot keeps editing. It must have been written by this bot.' + COPY_HELP,
       fields: [{ key: 'statusChannelId', label: 'Status channel ID', inputmode: 'numeric' },
                { key: 'statusMessageId', label: 'Status message ID', inputmode: 'numeric' }] },
     { id: 'queue', title: 'Download queue message', channelKey: 'queueChannelId', messageKey: 'queueMessageId',
-      help: 'The download queue message the bot keeps editing. It must have been written by this bot.',
+      help: 'The download queue message the bot keeps editing. It must have been written by this bot.' + COPY_HELP,
       fields: [{ key: 'queueChannelId', label: 'Queue channel ID', inputmode: 'numeric' },
                { key: 'queueMessageId', label: 'Queue message ID', inputmode: 'numeric' }] },
     { id: 'role', title: 'Role message', channelKey: 'roleChannelId', messageKey: 'roleMessageId',
-      help: 'The message people react to for a role. It must have been written by this bot.',
+      help: 'The message people react to for a role. It must have been written by this bot.' + COPY_HELP
+        + ' The role ID is under Server Settings, Roles: right-click the role and choose Copy Role ID.',
       fields: [{ key: 'roleId', label: 'Role ID', inputmode: 'numeric' },
                { key: 'roleChannelId', label: 'Role channel ID', inputmode: 'numeric' },
                { key: 'roleMessageId', label: 'Role message ID', inputmode: 'numeric' }] }
@@ -120,8 +118,8 @@
     Array.prototype.forEach.call(document.querySelectorAll('.adv-only'), function (n) { n.hidden = !advanced; });
     ['status', 'queue', 'role'].forEach(function (id) {
       var a = $(id + '-set');
-      if (advanced) { a.setAttribute('href', '#messages-' + id); a.setAttribute('aria-controls', 'messages'); a.classList.remove('plain'); }
-      else { a.removeAttribute('href'); a.removeAttribute('aria-controls'); a.classList.add('plain'); }
+      if (advanced) { a.setAttribute('href', '#messages-' + id); a.setAttribute('aria-haspopup', 'dialog'); a.classList.remove('plain'); }
+      else { a.removeAttribute('href'); a.removeAttribute('aria-haspopup'); a.classList.add('plain'); }
     });
     if (!advanced) { closeMessages(false); }
   }
@@ -230,19 +228,18 @@
   }
 
   function buildMessagesCard() {
-    // Hidden until a status line link opens it; shows one group at a time.
-    var card = el('section', { id: 'messages', 'class': 'card', 'aria-labelledby': 'h-messages', hidden: '' });
-    var closeBtn = el('button', { id: 'messages-close', type: 'button', 'class': 'close', text: 'Close' });
+    // A modal dialog opened by a status line link; shows one group at a time. The inputs stay in the
+    // DOM (hidden groups included) so the page's Save works the same and never clears their values.
+    var dlg = el('dialog', { id: 'messages', 'aria-labelledby': 'h-messages' });
+    var closeBtn = el('button', { id: 'messages-close', type: 'button', 'class': 'close', 'aria-label': 'Close', text: '\u00d7' });
     closeBtn.addEventListener('click', function () { closeMessages(true); });
-    card.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Escape' || ev.key === 'Esc') { ev.preventDefault(); closeMessages(true); }
-    });
-    card.appendChild(el('div', { 'class': 'card-head' }, [
-      el('h2', { id: 'h-messages', text: 'Discord messages (optional)' }), closeBtn]));
-    card.appendChild(el('p', { 'class': 'help', text: MESSAGE_INTRO }));
+    dlg.addEventListener('cancel', function (ev) { ev.preventDefault(); closeMessages(true); });
+    dlg.addEventListener('close', function () { if (openGroup !== null) { closeMessages(true); } });
+    dlg.addEventListener('click', function (ev) { if (ev.target === dlg) { closeMessages(true); } });
+    dlg.appendChild(el('div', { 'class': 'card-head' }, [
+      el('h2', { id: 'h-messages', text: 'Discord message' }), closeBtn]));
     MESSAGE_GROUPS.forEach(function (g) {
-      var box = el('div', { id: 'messages-' + g.id, 'class': 'group', role: 'group', 'aria-labelledby': 'h-' + g.id, hidden: '' });
-      box.appendChild(el('h3', { id: 'h-' + g.id, text: g.title }));
+      var box = el('div', { id: 'messages-' + g.id, 'class': 'group', role: 'group', 'aria-labelledby': 'h-messages', hidden: '' });
       box.appendChild(el('p', { 'class': 'help', text: g.help }));
       box.appendChild(el('label', { 'for': 'link-' + g.id, text: 'Paste message link (fills the channel and message ID below)' }));
       var link = el('input', { id: 'link-' + g.id, type: 'text', autocomplete: 'off', autocapitalize: 'off',
@@ -261,15 +258,20 @@
       var res = el('p', { id: 'result-' + g.id, 'class': 'result', 'aria-live': 'polite' });
       btn.addEventListener('click', function () { runTest(g, btn, res); });
       box.appendChild(el('div', { 'class': 'test-row' }, [btn, res]));
-      card.appendChild(box);
+      dlg.appendChild(box);
     });
-    return card;
+    var saveBtn = el('button', { id: 'messages-save', type: 'button', 'class': 'primary', text: 'Save' });
+    var doneBtn = el('button', { id: 'messages-done', type: 'button', text: 'Done' });
+    doneBtn.addEventListener('click', function () { closeMessages(true); });
+    saveBtn.addEventListener('click', function () { saveSettings(true); });
+    dlg.appendChild(el('p', { id: 'messages-save-result', 'class': 'result', 'aria-live': 'polite' }));
+    dlg.appendChild(el('div', { 'class': 'dialog-actions' }, [doneBtn, saveBtn]));
+    return dlg;
   }
 
-  // Status line links open the messages card on one group. Hidden groups stay in the DOM so
+  // Status line links open the messages dialog on one group. Hidden groups stay in the DOM so
   // saving never clears their values.
   var openGroup = null;
-  var flashTimer = null;
 
   function markLinks() {
     ['status', 'queue', 'role'].forEach(function (id) {
@@ -282,26 +284,29 @@
   function closeMessages(restoreFocus) {
     var opener = openGroup;
     openGroup = null;
-    var card = $('messages');
-    if (card) { card.hidden = true; }
+    var dlg = $('messages');
+    if (dlg && dlg.open) { dlg.close(); }
+    document.documentElement.classList.remove('modal-open');
     MESSAGE_GROUPS.forEach(function (g) { var b = $('messages-' + g.id); if (b) { b.hidden = true; } });
+    if ($('messages-save-result')) { setResult($('messages-save-result'), null, ''); }
     markLinks();
     if (restoreFocus && opener && $(opener + '-set')) { $(opener + '-set').focus(); }
   }
 
   function goToGroup(id) {
-    var box = $('messages-' + id);
     var g = MESSAGE_GROUPS.filter(function (x) { return x.id === id; })[0];
-    if (!box || !g) { return; }
-    MESSAGE_GROUPS.forEach(function (x) { $('messages-' + x.id).hidden = x.id !== id; $('messages-' + x.id).classList.remove('flash'); });
+    if (!g || !$('messages-' + id)) { return; }
+    MESSAGE_GROUPS.forEach(function (x) { $('messages-' + x.id).hidden = x.id !== id; });
+    if (logOpen) { closeLogs(); }
     openGroup = id;
-    $('messages').hidden = false;
+    $('h-messages').textContent = g.title;
+    setResult($('messages-save-result'), null, '');
     markLinks();
-    $('messages').scrollIntoView({ block: 'start' });
+    document.documentElement.classList.add('modal-open');
+    var dlg = $('messages');
+    if (!dlg.open) { if (dlg.showModal) { dlg.showModal(); } else { dlg.setAttribute('open', ''); } }
+    dlg.scrollTop = 0;
     $('f-' + g.fields[0].key).focus();
-    box.classList.add('flash');
-    if (flashTimer) { clearTimeout(flashTimer); }
-    flashTimer = setTimeout(function () { box.classList.remove('flash'); }, 1800);
   }
 
   ['status', 'queue', 'role'].forEach(function (id) {
@@ -377,8 +382,14 @@
 
   $('settings-form').addEventListener('submit', function (ev) {
     ev.preventDefault();
+    saveSettings(false);
+  });
+
+  // fromDialog: the Save button inside the messages dialog; the dialog closes once the save is accepted.
+  function saveSettings(fromDialog) {
     var btn = $('save');
-    var out = $('save-result');
+    var dlgBtn = $('messages-save');
+    var out = fromDialog ? $('messages-save-result') : $('save-result');
     var body = {};
     // Only fields the user changed are sent (absent = keep the saved value, "" = clear it). This is what
     // stops a page that loaded before a /setup command ran from overwriting the IDs that command saved.
@@ -387,12 +398,14 @@
       if (v !== initial[f.key]) { body[f.key] = v; }
     });
     btn.disabled = true;
+    dlgBtn.disabled = true;
     setResult(out, null, 'Saving...');
     stopPolling();
     api('PUT', '/api/settings', body)
       .then(function (r) {
         if (r.status === 401) { return; }
         if (r.status !== 200) { setResult(out, false, errText(r, 'Save failed')); return; }
+        if (fromDialog) { closeMessages(true); out = $('save-result'); }
         setResult(out, null, 'Saved. Starting the bot...');
         return api('GET', '/api/settings').then(function (s) {
           if (s.status === 200) { fillSettings(s.data); }
@@ -400,8 +413,8 @@
         });
       })
       .catch(function () { setResult(out, false, 'Could not reach the server'); })
-      .then(function () { btn.disabled = false; });
-  });
+      .then(function () { btn.disabled = false; dlgBtn.disabled = false; });
+  }
 
   function pollStatus(out, startedAt, gen) {
     return api('GET', '/api/status').then(function (r) {

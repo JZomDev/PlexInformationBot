@@ -40,7 +40,7 @@ Add a port mapping for container port 4546 and a path mapping from `/config` to 
 
 ## Using messages you already have
 
-Normally `/setupstatus`, `/setupcontentqueue` and `/setupreact` post a new message and save its IDs. If the bot already wrote a status, queue or role message and you want to keep using it, turn on Advanced mode, click the Status, Queue or Role message item at the top of the setup page to open the "Discord messages" card, and fill in its IDs instead.
+Normally `/setupstatus`, `/setupcontentqueue` and `/setupreact` post a new message and save its IDs. If the bot already wrote a status, queue or role message and you want to keep using it, turn on Advanced mode, click the Status, Queue or Role message item at the top of the setup page to open a popup for that message, and fill in its IDs instead.
 
 - In Discord turn on Developer Mode (User Settings, Advanced), right-click the message and choose Copy Message Link. Paste it into "Paste message link" in the matching group and the channel and message IDs are filled in for you. The role ID is separate: in Server Settings, Roles, right-click the role and choose Copy Role ID.
 - The IDs are the long numbers Discord shows (17 to 20 digits). Anything else is refused when you save.
@@ -49,7 +49,7 @@ Normally `/setupstatus`, `/setupcontentqueue` and `/setupreact` post a new messa
 
 ## Advanced mode
 
-The setup page starts in basic mode: only the Discord token and Plex sections are shown, and the status line at the top (Status, Queue and Role message) is plain text. Tick "Advanced mode" in the header to also show Tautulli, Radarr, Sonarr, and to make the status line items links. Clicking one opens the "Discord messages" card with just that group (status, queue or role); Close or Escape hides it again. The choice is remembered in your browser. Switching modes never clears anything: fields that are hidden keep their saved values.
+The setup page starts in basic mode: only the Discord token and Plex sections are shown, and the status line at the top (Status, Queue and Role message) is plain text. Tick "Advanced mode" in the header to also show Tautulli, Radarr, Sonarr, and to make the status line items links. Clicking one opens a popup with just that group (status, queue or role); the popup has its own Save button, and Done, the X, Escape or a click outside closes it. The choice is remembered in your browser. Switching modes never clears anything: fields that are hidden keep their saved values.
 
 ## Logs
 

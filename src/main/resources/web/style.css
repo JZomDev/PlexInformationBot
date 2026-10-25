@@ -56,7 +56,6 @@ h3 { font-size: 1.05rem; margin: 0 0 4px; }
 .strip a { color: var(--text); text-decoration: none; cursor: default; }
 .strip a[href] { color: var(--accent); text-decoration: underline; cursor: pointer; }
 .strip a[href]:hover { text-decoration: none; }
-.group.flash { background: var(--warn-bg); border-radius: 6px; outline: 2px solid var(--focus); }
 .actions { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: flex-end; margin-left: auto; flex: 0 1 auto; }
 .switch { display: inline-flex; align-items: center; gap: 8px; margin: 0; min-height: 44px; font-weight: 600; cursor: pointer; }
 .switch input { width: 24px; min-height: 24px; height: 24px; margin: 0; }
@@ -70,3 +69,11 @@ h3 { font-size: 1.05rem; margin: 0 0 4px; }
 .group input + .error:not(:empty) { margin: 6px 0 10px; }
 .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .card-head button { flex: none; }
+html.modal-open, html.modal-open body { overflow: hidden; }
+dialog#messages {
+  width: calc(100% - 32px); max-width: 560px; max-height: 90vh; overflow-y: auto; margin: auto;
+  padding: 16px; color: var(--text); background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+}
+dialog#messages::backdrop { background: rgba(0, 0, 0, .6); }
+dialog#messages .group { border-top: 0; margin-top: 0; padding-top: 0; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 12px; }
