@@ -43,3 +43,5 @@ bin/
 /.dockerignore
 /log/*
 .idea/*
+
+.env

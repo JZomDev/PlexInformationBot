@@ -3,6 +3,7 @@ package org.example.workers;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import kekolab.javaplex.PlexEpisode;
+import kekolab.javaplex.PlexMedia;
 import kekolab.javaplex.PlexMediatag;
 import kekolab.javaplex.PlexMovie;
 import kekolab.javaplex.PlexPart;
@@ -17,6 +18,10 @@ public class ActivePlexUsersWorker
 			try
 			{
 				List<PlexMediatag<?>> mediatags = application.getSessions(); // A list of all the items being streamed
+				if (mediatags == null)
+				{
+					return "Unknown";
+				}
 
 				int totalTotal = mediatags.size();
 				int directPlayTotal = 0;
@@ -25,9 +30,9 @@ public class ActivePlexUsersWorker
 				{
 					if (plexMediatag instanceof PlexMovie plexMovie)
 					{
-						for (int j = 0; j < plexMovie.getMedia().size(); j++)
+						for (PlexMedia media : plexMovie.getMedia())
 						{
-							List<PlexPart> plexParts = plexMovie.getMedia().get(0).getParts();
+							List<PlexPart> plexParts = media.getParts();
 
 							for (PlexPart p : plexParts)
 							{
@@ -44,9 +49,9 @@ public class ActivePlexUsersWorker
 					}
 					if (plexMediatag instanceof PlexEpisode plexEpisode)
 					{
-						for (int j = 0; j < plexEpisode.getMedia().size(); j++)
+						for (PlexMedia media : plexEpisode.getMedia())
 						{
-							List<PlexPart> plexParts = plexEpisode.getMedia().get(0).getParts();
+							List<PlexPart> plexParts = media.getParts();
 
 							for (PlexPart p : plexParts)
 							{
