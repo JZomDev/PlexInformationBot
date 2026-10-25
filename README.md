@@ -38,6 +38,15 @@ If the port is already taken, the bot still starts when a Discord token is confi
 
 Add a port mapping for container port 4546 and a path mapping from `/config` to a folder in your appdata share. The container runs as root, so a mounted folder is writable whatever its owner is.
 
+## Using messages you already have
+
+Normally `/setupstatus`, `/setupcontentqueue` and `/setupreact` post a new message and save its IDs. If the bot already wrote a status, queue or role message and you want to keep using it, open the "Discord messages" card on the setup page and fill in its IDs instead.
+
+- In Discord turn on Developer Mode (User Settings, Advanced), right-click the message and choose Copy Message Link. Paste it into "Paste message link" in the matching group and the channel and message IDs are filled in for you. The role ID is separate: in Server Settings, Roles, right-click the role and choose Copy Role ID.
+- The IDs are the long numbers Discord shows (17 to 20 digits). Anything else is refused when you save.
+- Click Test in a group to check, with the running bot, that the channel and message exist and that the bot wrote the message (a bot can only edit its own messages). For the role message it also checks that the role can be handed out. Test needs the bot to be connected, so save the Discord token first.
+- Only fields you change are saved, so a message set up by a slash command in the meantime is not overwritten by an older copy of the page. Emptying a field clears it.
+
 ## Security notes
 
 - Open the page right after starting the container and change the default login. Until you do, anyone who can reach the port can sign in as `admin` / `admin`.
@@ -62,11 +71,11 @@ The old environment variables still work as a fallback. Anything saved on the se
 | `RADARR_API` | Radarr: Radarr API key |
 | `SONARR_URL` | Sonarr: Sonarr host:port |
 | `SONARR_API` | Sonarr: Sonarr API key |
-| `ROLE_ID` | none, set by `/setupreact` |
-| `TEXT_CHANNELID` | none, set by `/setupstatus` |
-| `MESSAGEID` | none, set by `/setupstatus` |
-| `QUEUE_TEXT_CHANNELID` | none, set by `/setupcontentqueue` |
-| `QUEUEMESSAGEID` | none, set by `/setupcontentqueue` |
+| `ROLE_ID` | Discord messages: Role ID (or `/setupreact`) |
+| `TEXT_CHANNELID` | Discord messages: Status channel ID (or `/setupstatus`) |
+| `MESSAGEID` | Discord messages: Status message ID (or `/setupstatus`) |
+| `QUEUE_TEXT_CHANNELID` | Discord messages: Queue channel ID (or `/setupcontentqueue`) |
+| `QUEUEMESSAGEID` | Discord messages: Queue message ID (or `/setupcontentqueue`) |
 
 ## Building from source
 

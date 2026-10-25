@@ -125,4 +125,54 @@ public record Settings(String botToken, String plexIp, String plexPort, String p
 				host(radarrUrl), radarrApiKey, host(sonarrUrl), sonarrApiKey, roleId, roleChannelId,
 				roleMessageId, statusChannelId, statusMessageId, queueChannelId, queueMessageId);
 	}
+
+	private static final String BAD_ID = " must be the number Discord shows, 17 to 20 digits";
+
+	/** A Discord snowflake: 17 to 20 ASCII digits (after trimming). */
+	private static boolean snowflake(String value)
+	{
+		String v = value.strip();
+		if (v.isEmpty())
+		{
+			return true;
+		}
+		if (v.length() < 17 || v.length() > 20)
+		{
+			return false;
+		}
+		for (int i = 0; i < v.length(); i++)
+		{
+			char c = v.charAt(i);
+			if (c < '0' || c > '9')
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/** The fixed error text for the first Discord ID field that is neither empty nor a snowflake. */
+	public java.util.Optional<String> invalidIdField()
+	{
+		String[] labels = {"Role ID", "Role channel ID", "Role message ID", "Status channel ID",
+				"Status message ID", "Queue channel ID", "Queue message ID"};
+		String[] values = {roleId, roleChannelId, roleMessageId, statusChannelId, statusMessageId,
+				queueChannelId, queueMessageId};
+		for (int i = 0; i < labels.length; i++)
+		{
+			if (!snowflake(values[i]))
+			{
+				return java.util.Optional.of(labels[i] + BAD_ID);
+			}
+		}
+		return java.util.Optional.empty();
+	}
+
+	/** Surrounding whitespace removed from the Discord ID fields only. */
+	public Settings trimmedIds()
+	{
+		return new Settings(botToken, plexIp, plexPort, plexToken, tautulliUrl, tautulliApiKey, radarrUrl,
+				radarrApiKey, sonarrUrl, sonarrApiKey, roleId.strip(), roleChannelId.strip(), roleMessageId.strip(),
+				statusChannelId.strip(), statusMessageId.strip(), queueChannelId.strip(), queueMessageId.strip());
+	}
 }

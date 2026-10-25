@@ -24,11 +24,39 @@
       fields: [{ key: 'sonarrUrl', label: 'Sonarr host:port' },
                { key: 'sonarrApiKey', label: 'Sonarr API key', secret: true }] }
   ];
+  var MESSAGE_INTRO = 'Normally the /setupstatus, /setupcontentqueue and /setupreact commands fill these in. '
+    + 'To keep using an existing message the bot already wrote, paste its IDs here. '
+    + 'In Discord turn on Developer Mode (User Settings, Advanced), right-click the message and choose '
+    + 'Copy Message Link. The link ends with .../channelId/messageId. '
+    + 'The role ID is under Server Settings, Roles: right-click the role and choose Copy Role ID.';
+  var MESSAGE_GROUPS = [
+    { id: 'status', title: 'Status message', channelKey: 'statusChannelId', messageKey: 'statusMessageId',
+      help: 'The live activity message the bot keeps editing. It must have been written by this bot.',
+      fields: [{ key: 'statusChannelId', label: 'Status channel ID', inputmode: 'numeric' },
+               { key: 'statusMessageId', label: 'Status message ID', inputmode: 'numeric' }] },
+    { id: 'queue', title: 'Download queue message', channelKey: 'queueChannelId', messageKey: 'queueMessageId',
+      help: 'The download queue message the bot keeps editing. It must have been written by this bot.',
+      fields: [{ key: 'queueChannelId', label: 'Queue channel ID', inputmode: 'numeric' },
+               { key: 'queueMessageId', label: 'Queue message ID', inputmode: 'numeric' }] },
+    { id: 'role', title: 'Role message', channelKey: 'roleChannelId', messageKey: 'roleMessageId',
+      help: 'The message people react to for a role. It must have been written by this bot.',
+      fields: [{ key: 'roleId', label: 'Role ID', inputmode: 'numeric' },
+               { key: 'roleChannelId', label: 'Role channel ID', inputmode: 'numeric' },
+               { key: 'roleMessageId', label: 'Role message ID', inputmode: 'numeric' }] }
+  ];
+  var LINK_RE = /^https:\/\/(?:www\.|ptb\.|canary\.)?discord(?:app)?\.com\/channels\/(\d+)\/(\d+)\/(\d+)$/;
   var STATE_LABELS = { NOT_CONFIGURED: 'not configured', STARTING: 'starting', RUNNING: 'running', FAILED: 'failed' };
 
   var csrf = '';
   var initial = {};
   var pollGen = 0;
+
+  // Every field the form can send, in page order.
+  function allFields() {
+    var out = [];
+    SECTIONS.concat(MESSAGE_GROUPS).forEach(function (s) { out = out.concat(s.fields); });
+    return out;
+  }
 
   function $(id) { return document.getElementById(id); }
 
@@ -167,6 +195,49 @@
       card.appendChild(el('div', { 'class': 'test-row' }, [btn, res]));
       host.appendChild(card);
     });
+    host.appendChild(buildMessagesCard());
+  }
+
+  function buildMessagesCard() {
+    var card = el('section', { 'class': 'card', 'aria-labelledby': 'h-messages' });
+    card.appendChild(el('h2', { id: 'h-messages', text: 'Discord messages (optional)' }));
+    card.appendChild(el('p', { 'class': 'help', text: MESSAGE_INTRO }));
+    MESSAGE_GROUPS.forEach(function (g) {
+      var box = el('div', { 'class': 'group', role: 'group', 'aria-labelledby': 'h-' + g.id });
+      box.appendChild(el('h3', { id: 'h-' + g.id, text: g.title }));
+      box.appendChild(el('p', { 'class': 'help', text: g.help }));
+      box.appendChild(el('label', { 'for': 'link-' + g.id, text: 'Paste message link' }));
+      var link = el('input', { id: 'link-' + g.id, type: 'text', autocomplete: 'off', autocapitalize: 'off',
+                               spellcheck: 'false', 'aria-describedby': 'link-error-' + g.id });
+      box.appendChild(link);
+      var linkErr = el('p', { id: 'link-error-' + g.id, 'class': 'error', 'aria-live': 'polite' });
+      box.appendChild(linkErr);
+      link.addEventListener('input', function () { applyLink(g, link, linkErr); });
+      link.addEventListener('change', function () { applyLink(g, link, linkErr); });
+      g.fields.forEach(function (f) {
+        box.appendChild(el('label', { 'for': 'f-' + f.key, text: f.label }));
+        box.appendChild(el('input', { id: 'f-' + f.key, name: f.key, type: 'text', inputmode: 'numeric',
+                                      autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false' }));
+      });
+      var btn = el('button', { id: 'test-' + g.id, type: 'button', text: 'Test' });
+      var res = el('p', { id: 'result-' + g.id, 'class': 'result', 'aria-live': 'polite' });
+      btn.addEventListener('click', function () { runTest(g, btn, res); });
+      box.appendChild(el('div', { 'class': 'test-row' }, [btn, res]));
+      card.appendChild(box);
+    });
+    return card;
+  }
+
+  // Fills the group's channel and message IDs from a pasted message link. Digits only, text only.
+  function applyLink(g, link, err) {
+    var v = link.value.trim();
+    if (!v) { err.textContent = ''; return; }
+    var m = LINK_RE.exec(v);
+    if (!m) { err.textContent = 'Not a Discord message link'; return; }
+    $('f-' + g.channelKey).value = m[2];
+    $('f-' + g.messageKey).value = m[3];
+    link.value = '';
+    err.textContent = '';
   }
 
   function loadMain() {
@@ -180,12 +251,10 @@
 
   function fillSettings(data) {
     initial = {};
-    SECTIONS.forEach(function (s) {
-      s.fields.forEach(function (f) {
-        var v = data[f.key] == null ? '' : String(data[f.key]);
-        initial[f.key] = v;
-        $('f-' + f.key).value = v;
-      });
+    allFields().forEach(function (f) {
+      var v = data[f.key] == null ? '' : String(data[f.key]);
+      initial[f.key] = v;
+      $('f-' + f.key).value = v;
     });
     var w = $('warning');
     if (typeof data.warning === 'string' && data.warning) { w.textContent = data.warning; w.hidden = false; }
@@ -228,11 +297,11 @@
     var btn = $('save');
     var out = $('save-result');
     var body = {};
-    SECTIONS.forEach(function (s) {
-      s.fields.forEach(function (f) {
-        var v = $('f-' + f.key).value;
-        if (v !== initial[f.key]) { body[f.key] = v; }
-      });
+    // Only fields the user changed are sent (absent = keep the saved value, "" = clear it). This is what
+    // stops a page that loaded before a /setup command ran from overwriting the IDs that command saved.
+    allFields().forEach(function (f) {
+      var v = $('f-' + f.key).value;
+      if (v !== initial[f.key]) { body[f.key] = v; }
     });
     btn.disabled = true;
     setResult(out, null, 'Saving...');

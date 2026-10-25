@@ -130,7 +130,8 @@ class WebServerTest
 		checks = new FakeChecks();
 		MutableClock clock = new MutableClock();
 		server = new WebServer(0, settings, credentials, new SessionManager(clock), new LoginThrottle(clock),
-				checksOverride != null ? checksOverride : checks, bot);
+				checksOverride != null ? checksOverride : checks, bot,
+					(channelId, messageId) -> new CheckResult(true, "unused"));
 		server.start();
 		http = HttpClient.newHttpClient();
 	}
@@ -466,14 +467,14 @@ class WebServerTest
 		JsonObject full = new JsonObject();
 		full.addProperty("radarrApiKey", "radarr-key");
 		full.addProperty("tautulliApiKey", "tautulli-key");
-		full.addProperty("queueMessageId", "123");
+		full.addProperty("queueMessageId", "123456789012345678");
 		full.addProperty("plexIp", "1.1.1.1");
 		assertEquals(200, call("PUT", "/api/settings", full.toString(), c).status());
 		assertEquals(200, call("PUT", "/api/settings", "{\"plexIp\":\"2.2.2.2\"}", c).status());
 		assertEquals("2.2.2.2", settings.fileValues().plexIp());
 		assertEquals("radarr-key", settings.fileValues().radarrApiKey());
 		assertEquals("tautulli-key", settings.fileValues().tautulliApiKey());
-		assertEquals("123", settings.fileValues().queueMessageId());
+		assertEquals("123456789012345678", settings.fileValues().queueMessageId());
 		assertEquals(200, call("PUT", "/api/settings", "{\"radarrApiKey\":\"\"}", c).status());
 		assertEquals("", settings.fileValues().radarrApiKey());
 		assertEquals("tautulli-key", settings.fileValues().tautulliApiKey());

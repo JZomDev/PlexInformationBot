@@ -81,7 +81,7 @@ public class Main
 		application.setSettingsStore(settings);
 		WebServer web = new WebServer(port, settings, new CredentialStore(configDir),
 			new SessionManager(Clock.systemUTC()), new LoginThrottle(Clock.systemUTC()),
-			new ConnectionChecks(http, new JavacordDiscordProbe()), application);
+			new ConnectionChecks(http, new JavacordDiscordProbe()), application, application.messageProbe());
 		try
 		{
 			web.start();

@@ -27,7 +27,8 @@ public class WebServer
 	private static final Logger logger = LogManager.getLogger(WebServer.class);
 	private static final String COOKIE = "sid";
 	private static final String TEST_PREFIX = "/api/test/";
-	private static final List<String> TEST_SECTIONS = List.of("discord", "plex", "tautulli", "radarr", "sonarr");
+	private static final List<String> TEST_SECTIONS = List.of("discord", "plex", "tautulli", "radarr", "sonarr",
+			"status", "queue", "role");
 
 	private interface Route
 	{
@@ -45,13 +46,14 @@ public class WebServer
 	private final LoginThrottle throttle;
 	private final ConnectionChecks checks;
 	private final BotController bot;
+	private final MessageProbe messages;
 	private final Map<String, Api> routes = new LinkedHashMap<>();
 	private final Object saveLock = new Object();
 	private HttpServer server;
 	private ExecutorService executor;
 
 	public WebServer(int port, SettingsStore settings, CredentialStore credentials, SessionManager sessions,
-					 LoginThrottle throttle, ConnectionChecks checks, BotController bot)
+					 LoginThrottle throttle, ConnectionChecks checks, BotController bot, MessageProbe messages)
 	{
 		this.requestedPort = port;
 		this.settings = settings;
@@ -60,6 +62,7 @@ public class WebServer
 		this.throttle = throttle;
 		this.checks = checks;
 		this.bot = bot;
+		this.messages = messages;
 		routes.put("/api/session", new Api("GET", false, true, this::session));
 		routes.put("/api/login", new Api("POST", false, true, (ex, s) -> login(ex)));
 		routes.put("/api/logout", new Api("POST", false, true, this::logout));
@@ -387,6 +390,14 @@ public class WebServer
 			if (body != null)
 			{
 				withAbsentKept(body, settings.fileValues());
+				// Only keys the page actually sent are checked (absent ones become ""), so an old value
+				// that was never touched can not block a save.
+				Optional<String> bad = withAbsentKept(body, Settings.empty()).invalidIdField();
+				if (bad.isPresent())
+				{
+					HttpIo.sendError(ex, 400, bad.get());
+					return;
+				}
 			}
 			submitted = body;
 		}
@@ -404,7 +415,7 @@ public class WebServer
 		{
 			try
 			{
-				settings.update(saved -> saved.applyForm(withAbsentKept(form, saved)).normalisedHosts());
+				settings.update(saved -> saved.applyForm(withAbsentKept(form, saved)).trimmedIds().normalisedHosts());
 			}
 			catch (IOException e)
 			{
@@ -476,6 +487,7 @@ public class WebServer
 		Settings e = settings.effective();
 		CheckResult result = switch (section)
 		{
+			case "status", "queue", "role" -> messageTest(in, e, section);
 			case "discord" -> checks.discord(secret(in, "botToken", e.botToken(), true));
 			case "plex" ->
 			{
@@ -505,6 +517,64 @@ public class WebServer
 			}
 		};
 		HttpIo.sendJson(ex, 200, Map.of("ok", result.ok(), "message", result.message()));
+	}
+
+	private static final CheckResult PROBE_FAILED = new CheckResult(false, "Could not check the message");
+
+	/** The typed value, or the saved one when nothing was typed. Whitespace around it is ignored. */
+	private static String typedOrSaved(JsonObject in, String key, String saved)
+	{
+		String v = str(in, key);
+		return (v == null || v.isBlank() ? saved : v).strip();
+	}
+
+	private CheckResult messageTest(JsonObject in, Settings e, String kind)
+	{
+		boolean role = kind.equals("role");
+		String channelKey = kind + "ChannelId";
+		String messageKey = kind + "MessageId";
+		String channel = typedOrSaved(in, channelKey, switch (kind)
+		{
+			case "status" -> e.statusChannelId();
+			case "queue" -> e.queueChannelId();
+			default -> e.roleChannelId();
+		});
+		String message = typedOrSaved(in, messageKey, switch (kind)
+		{
+			case "status" -> e.statusMessageId();
+			case "queue" -> e.queueMessageId();
+			default -> e.roleMessageId();
+		});
+		String roleId = role ? typedOrSaved(in, "roleId", e.roleId()) : "";
+		JsonObject typed = new JsonObject();
+		typed.addProperty(channelKey, channel);
+		typed.addProperty(messageKey, message);
+		typed.addProperty("roleId", roleId);
+		Optional<String> bad = HttpIo.GSON.fromJson(typed, Settings.class).invalidIdField();
+		if (bad.isPresent())
+		{
+			return new CheckResult(false, bad.get());
+		}
+		if (channel.isEmpty() || message.isEmpty() || (role && roleId.isEmpty()))
+		{
+			return new CheckResult(false, role ? "Enter the role ID, the channel ID and the message ID first"
+					: "Enter the channel ID and the message ID first");
+		}
+		try
+		{
+			CheckResult found = messages.probe(channel, message);
+			if (!found.ok() || !role)
+			{
+				return found;
+			}
+			CheckResult roleResult = messages.probeRole(roleId, channel);
+			return roleResult.ok() ? new CheckResult(true, found.message() + ". The role can be handed out.")
+					: roleResult;
+		}
+		catch (RuntimeException ex)
+		{
+			return PROBE_FAILED;
+		}
 	}
 
 	private void status(HttpExchange ex, SessionManager.Session s) throws IOException

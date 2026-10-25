@@ -61,7 +61,7 @@ public class SetupCommandsListener implements SlashCommandCreateListener
 	}
 
 	/** Null when the role can be handed out by the bot; otherwise the fixed text to reply with. */
-	static String roleProblem(boolean everyoneRole, boolean managed, boolean botCanManage)
+	public static String roleProblem(boolean everyoneRole, boolean managed, boolean botCanManage)
 	{
 		return everyoneRole || managed || !botCanManage ? BAD_ROLE : null;
 	}

@@ -37,6 +37,8 @@ import org.example.bot.SessionCache;
 import org.example.config.AppConfig;
 import org.example.config.SettingsStore;
 import org.example.listeners.SetupCommandsListener;
+import org.example.web.JavacordMessageProbe;
+import org.example.web.MessageProbe;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.event.server.ServerBecomesAvailableEvent;
 import org.javacord.api.event.server.ServerJoinEvent;
@@ -70,6 +72,15 @@ public class Application implements BotController
 	private final SessionCache<List<PlexMediatag<?>>> sessionCache =
 			new SessionCache<>(this::loadSessions, System::currentTimeMillis, SESSION_CACHE_MS);
 	private final AtomicBoolean queueEmbedTaskRunning = new AtomicBoolean(false);
+
+	/** The connected bot while a connection is open, else null. */
+	private volatile DiscordApi liveApi;
+
+	/** Answers the setup page's message checks using the running bot. */
+	public MessageProbe messageProbe()
+	{
+		return new JavacordMessageProbe(() -> liveApi);
+	}
 
 	/** Lets the setup slash commands save the message IDs they create. */
 	public void setSettingsStore(SettingsStore store)
@@ -149,6 +160,7 @@ public class Application implements BotController
 				registerSetupCommands(api, joined);
 			}
 			service = launchScheduledExecutor(api);
+			liveApi = api;
 		}
 		catch (Throwable e)
 		{
@@ -156,6 +168,7 @@ public class Application implements BotController
 			throw e;
 		}
 		return () -> {
+			liveApi = null;
 			service.shutdownNow();
 			try
 			{
