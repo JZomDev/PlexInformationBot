@@ -22,6 +22,12 @@ Instead of the `config` folder you can use a named volume, for example `-v plexi
 
    These commands are admin-only.
 
+## Invite link, health dots and setup checklist
+
+- **Invite link:** once a Discord bot token is saved, the Discord section shows "Invite the bot to your server". It opens Discord's authorisation page in a new tab with the permissions the bot needs (view channels, send messages, embed links, read history, add reactions, manage roles). The link is built from the token on the server without contacting Discord, and the token is never sent to the page. It is hidden when there is no usable token.
+- **Health dots:** each section heading has a dot and a label: green "Connected", red "Unreachable", grey "Not set" or "Checking". Hover for the message. The page asks every 30 seconds while it is visible and you are signed in. The server runs the same checks as the Test buttons in the background, at most once a minute (and not sooner than 10 seconds after the last one when you save), and answers from the last result, so a slow service never slows the page. Discord's dot reflects the running bot; it does not log in a second time.
+- **Setup checklist:** a card under the status box lists the first-run steps: bot token saved and running, Plex connected, slash commands registered, status message set, and the optional download queue and role messages, each with a one-line hint when not done. It disappears once the first four are done, or when you press Hide (remembered in your browser). "Show setup checklist" in the status box brings it back.
+
 ## Changing the port
 
 The setup page listens on 4546. To use another port, set `WEB_PORT` and map the same port:
