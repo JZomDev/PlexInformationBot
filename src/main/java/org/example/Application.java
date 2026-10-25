@@ -114,7 +114,7 @@ public class Application implements BotController
 			api.addSlashCommandCreateListener(new PlexListener(getServer(), this));
 			service = launchScheduledExecutor(api);
 		}
-		catch (RuntimeException e)
+		catch (Throwable e)
 		{
 			disconnect(api);
 			throw e;

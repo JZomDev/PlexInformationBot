@@ -2,7 +2,6 @@ package org.example.bot;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicReference;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.example.config.Settings;
@@ -33,7 +32,8 @@ public class BotLifecycle implements BotController
 		t.setDaemon(true);
 		return t;
 	});
-	private final AtomicReference<Settings> pending = new AtomicReference<>();
+	private final Object lock = new Object(); // guards pending and state so hand-off and transitions are atomic
+	private Settings pending;
 	private volatile BotState state = BotState.NOT_CONFIGURED;
 	private Connection current; // only touched on the lifecycle thread
 
@@ -45,8 +45,11 @@ public class BotLifecycle implements BotController
 	@Override
 	public void restart(Settings effective)
 	{
-		pending.set(effective);
-		state = BotState.STARTING;
+		synchronized (lock)
+		{
+			pending = effective;
+			state = BotState.STARTING;
+		}
 		executor.execute(this::applyPending);
 	}
 
@@ -64,7 +67,12 @@ public class BotLifecycle implements BotController
 
 	private void applyPending()
 	{
-		Settings settings = pending.getAndSet(null);
+		Settings settings;
+		synchronized (lock)
+		{
+			settings = pending;
+			pending = null;
+		}
 		if (settings == null)
 		{
 			return;
@@ -89,9 +97,12 @@ public class BotLifecycle implements BotController
 
 	private void finish(BotState result)
 	{
-		if (pending.get() == null)
+		synchronized (lock)
 		{
-			state = result;
+			if (pending == null)
+			{
+				state = result;
+			}
 		}
 	}
 
