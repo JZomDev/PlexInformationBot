@@ -144,6 +144,7 @@ public class Application implements BotController
 		clearSessions();
 		lastEmbedSignature = "";
 		queueEmbedTaskRunning.set(false);
+		plexReconnecting.set(false);
 		initApi(settings);
 		try
 		{
