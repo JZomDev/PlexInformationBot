@@ -30,13 +30,13 @@ The setup page listens on 4546. To use another port, set `WEB_PORT` and map the 
 docker run -d --name plexinfobot -e WEB_PORT=8080 -p 8080:8080 -v "$(pwd)/config:/config" redzguilt/plexinfobot
 ```
 
-If the port is already taken, the bot still starts when a Discord token is configured, but without the setup page (check the log for the bind error). With no token configured it exits with an error, since there would be nothing to run.
+If the port is already taken, the bot still starts and keeps running when a Discord token is configured, but without the setup page (check the log for the bind error). With no token configured it exits with an error, since there would be nothing to run.
 
 `WEB_PORT` is the only environment setting a new install needs. `CONFIG_DIR` (default `/config`) can move the config folder but you normally do not need it.
 
 ## Unraid
 
-Add a port mapping for container port 4546 and a path mapping from `/config` to a folder in your appdata share. The container runs as root, so a mounted folder is writable whatever its owner is.
+Add a port mapping for container port 4546 and a path mapping from `/config` to a folder in your appdata share. The container starts as root only to prepare `/config`, then runs the bot as `PUID`:`PGID` (default `99`:`100`, Unraid's `nobody:users`). Set the `PUID` and `PGID` environment variables to use another user; `PUID=0` keeps running as root. On every start the contents of `/config` are chowned to that user, so files written by older (root) versions stay readable. If `/config` is read-only the chown is skipped with a warning.
 
 ## Using messages you already have
 
