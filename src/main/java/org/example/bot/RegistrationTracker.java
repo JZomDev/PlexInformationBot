@@ -7,6 +7,19 @@ import java.util.concurrent.ConcurrentHashMap;
 public class RegistrationTracker
 {
 	private final Set<Long> claimed = ConcurrentHashMap.newKeySet();
+	private volatile boolean anySucceeded;
+
+	/** Called when the commands were registered for this server. */
+	public void succeeded(long serverId)
+	{
+		anySucceeded = true;
+	}
+
+	/** True once at least one server got its commands during this connection. */
+	public boolean anySucceeded()
+	{
+		return anySucceeded;
+	}
 
 	/** True for the caller that should register this server; false when it already did or is doing so. */
 	public boolean claim(long serverId)

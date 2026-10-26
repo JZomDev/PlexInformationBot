@@ -25,6 +25,18 @@ class RegistrationTrackerTest
 	}
 
 	@Test
+	void reportsSuccessOnlyAfterARegistrationWasMarkedDone()
+	{
+		RegistrationTracker t = new RegistrationTracker();
+		assertFalse(t.anySucceeded());
+		t.claim(1L);
+		assertFalse(t.anySucceeded());
+		t.succeeded(1L);
+		assertTrue(t.anySucceeded());
+		assertFalse(new RegistrationTracker().anySucceeded());
+	}
+
+	@Test
 	void aNewTrackerStartsEmptyForANewConnection()
 	{
 		RegistrationTracker first = new RegistrationTracker();

@@ -47,10 +47,17 @@ public class WebServer
 	private final ConnectionChecks checks;
 	private final BotController bot;
 	private final MessageProbe messages;
+	private final HealthMonitor health;
 	private final Map<String, Api> routes = new LinkedHashMap<>();
 	private final Object saveLock = new Object();
 	private HttpServer server;
 	private ExecutorService executor;
+	private final ExecutorService healthExecutor = Executors.newFixedThreadPool(4, r ->
+	{
+		Thread t = new Thread(r, "health-check");
+		t.setDaemon(true);
+		return t;
+	});
 
 	public WebServer(int port, SettingsStore settings, CredentialStore credentials, SessionManager sessions,
 					 LoginThrottle throttle, ConnectionChecks checks, BotController bot, MessageProbe messages)
@@ -63,6 +70,8 @@ public class WebServer
 		this.checks = checks;
 		this.bot = bot;
 		this.messages = messages;
+		this.health = new HealthMonitor(settings::effective, checks, bot::state, healthExecutor,
+				System::currentTimeMillis);
 		routes.put("/api/session", new Api("GET", false, true, this::session));
 		routes.put("/api/login", new Api("POST", false, true, (ex, s) -> login(ex)));
 		routes.put("/api/logout", new Api("POST", false, true, this::logout));
@@ -71,6 +80,8 @@ public class WebServer
 		routes.put("/api/settings", new Api("GET", true, false, this::getSettings));
 		routes.put("/api/secret", new Api("POST", true, false, this::secret));
 		routes.put("/api/logs", new Api("GET", true, false, this::logs));
+		routes.put("/api/invite", new Api("GET", true, false, this::invite));
+		routes.put("/api/health", new Api("GET", true, false, this::health));
 	}
 
 	public void start() throws IOException
@@ -92,6 +103,7 @@ public class WebServer
 		{
 			executor.shutdownNow();
 		}
+		healthExecutor.shutdownNow();
 	}
 
 	public int port()
@@ -442,6 +454,7 @@ public class WebServer
 			try
 			{
 				settings.update(saved -> saved.applyForm(withAbsentKept(form, saved)).trimmedIds().normalisedHosts());
+				health.settingsChanged();
 			}
 			catch (IOException e)
 			{
@@ -635,6 +648,18 @@ public class WebServer
 		HttpIo.sendJson(ex, 200, body);
 	}
 
+	private void invite(HttpExchange ex, SessionManager.Session s) throws IOException
+	{
+		HttpIo.sendJson(ex, 200, Map.of("url", BotInvite.url(settings.effective().botToken())));
+	}
+
+	/** Cached results only; the checks run in the background. ?refresh=1 asks for a fresher one (10 s minimum). */
+	private void health(HttpExchange ex, SessionManager.Session s) throws IOException
+	{
+		String query = ex.getRequestURI().getRawQuery();
+		HttpIo.sendJson(ex, 200, health.snapshot(query != null && query.contains("refresh=1")));
+	}
+
 	private void status(HttpExchange ex, SessionManager.Session s) throws IOException
 	{
 		Settings e = settings.effective();
@@ -643,6 +668,7 @@ public class WebServer
 		body.put("queueSet", !e.queueChannelId().isEmpty() && !e.queueMessageId().isEmpty());
 		body.put("statusSet", !e.statusChannelId().isEmpty() && !e.statusMessageId().isEmpty());
 		body.put("roleSet", !e.roleChannelId().isEmpty() && !e.roleMessageId().isEmpty());
+		body.put("setupCommandsRegistered", bot.setupCommandsRegistered());
 		HttpIo.sendJson(ex, 200, body);
 	}
 }

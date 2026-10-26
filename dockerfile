@@ -13,7 +13,9 @@ FROM eclipse-temurin:17-jdk
 RUN mkdir -p /srv
 WORKDIR /srv
 COPY --from=builder /home/gradle/src/build/libs/PlexInformationBot.jar /srv
+COPY entrypoint.sh /srv/entrypoint.sh
+RUN chmod +x /srv/entrypoint.sh
 ENV CONFIG_DIR=/config
 EXPOSE 4546
 VOLUME /config
-CMD ["java", "-jar", "PlexInformationBot.jar"]
+ENTRYPOINT ["/srv/entrypoint.sh"]

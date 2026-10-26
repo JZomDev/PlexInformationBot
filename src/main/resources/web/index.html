@@ -50,9 +50,17 @@
       </div>
       <div class="actions">
         <label class="switch" for="advanced"><input id="advanced" type="checkbox"> Advanced mode</label>
+        <button id="checklist-show" type="button" aria-controls="setup-checklist" hidden>Show setup checklist</button>
         <button id="logs-toggle" type="button" aria-expanded="false" aria-controls="logs-view">Logs</button>
         <button id="logout" type="button">Sign out</button>
       </div>
+    </section>
+    <section id="setup-checklist" class="card" aria-labelledby="h-checklist" hidden>
+      <div class="card-head">
+        <h2 id="h-checklist">Setup checklist</h2>
+        <button id="checklist-hide" type="button">Hide</button>
+      </div>
+      <ol id="checklist-steps" class="checklist"></ol>
     </section>
     <div id="warning" class="banner" role="alert" hidden></div>
     <section id="logs-view" class="card" aria-labelledby="h-logs" hidden>

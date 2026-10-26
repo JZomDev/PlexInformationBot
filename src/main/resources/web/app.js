@@ -45,7 +45,30 @@
   var LINK_RE = /^https:\/\/(?:www\.|ptb\.|canary\.)?discord(?:app)?\.com\/channels\/(\d+)\/(\d+)\/(\d+)$/;
   var STATE_LABELS = { NOT_CONFIGURED: 'not configured', STARTING: 'starting', RUNNING: 'running', FAILED: 'failed' };
 
+  var HEALTH_LABELS = { ok: 'Connected', down: 'Unreachable', unset: 'Not set', unknown: 'Checking' };
+
+  var CHECKLIST_KEY = 'setupChecklistDismissed';
+  var CHECKLIST_STEPS = [
+    { text: 'Discord token saved and bot running', how: 'Paste the bot token in the Discord section and press Save.',
+      done: function (st) { return st.botState === 'RUNNING'; } },
+    { text: 'Plex connected', how: 'Fill in the Plex address and token, press Save, then Test.',
+      done: function () { return healthStates.plex === 'ok'; } },
+    { text: 'Slash commands registered', how: 'Invite the bot to your server with the link in the Discord section.',
+      done: function (st) { return st.setupCommandsRegistered === true; } },
+    { text: 'Status message set', how: 'Run /setupstatus in the channel you want.',
+      done: function (st) { return st.statusSet === true; } },
+    { text: 'Download queue message set', optional: true, how: 'Run /setupcontentqueue in the channel you want.',
+      done: function (st) { return st.queueSet === true; } },
+    { text: 'Role message set', optional: true, how: 'Run /setupreact in the channel you want.',
+      done: function (st) { return st.roleSet === true; } }
+  ];
+  var REQUIRED_STEPS = 4;
+
   var csrf = '';
+  var lastStatus = null;
+  var healthStates = {};
+  var checklistDismissed = false;
+  var checklistForced = false;
   var initial = {};
   var revealGen = 0;
   var pollGen = 0;
@@ -222,6 +245,12 @@
   function toLogin() {
     closeLogs();
     stopPolling();
+    stopHealth();
+    lastStatus = null;
+    healthStates = {};
+    checklistForced = false;
+    $('setup-checklist').hidden = true;
+    $('checklist-show').hidden = true;
     csrf = '';
     initial = {};
     $('save').disabled = false;
@@ -245,6 +274,7 @@
     buildSections();
     try { advanced = localStorage.getItem('advancedMode') === '1'; } catch (e) { advanced = false; }
     $('advanced').checked = advanced;
+    try { checklistDismissed = localStorage.getItem(CHECKLIST_KEY) === '1'; } catch (e) { checklistDismissed = false; }
     applyMode();
     api('GET', '/api/session').then(function (r) { return route(r.data); })
       .catch(function () { $('loading').textContent = 'Could not reach the server. Reload to try again.'; });
@@ -298,7 +328,12 @@
     var host = $('sections');
     SECTIONS.forEach(function (s) {
       var card = el('section', { 'class': 'card' + (s.optional ? ' adv-only' : ''), 'aria-labelledby': 'h-' + s.id });
-      card.appendChild(el('h2', { id: 'h-' + s.id, text: s.title + (s.optional ? ' (optional)' : '') }));
+      var dot = el('span', { 'class': 'dot', 'aria-hidden': 'true' });
+      var label = el('span', { 'class': 'health-label', text: HEALTH_LABELS.unknown });
+      var note = el('span', { 'class': 'sr-only' });
+      card.appendChild(el('div', { 'class': 'sec-head' }, [
+        el('h2', { id: 'h-' + s.id, text: s.title + (s.optional ? ' (optional)' : '') }),
+        el('span', { id: 'health-' + s.id, 'class': 'health state-unknown' }, [dot, label, note])]));
       card.appendChild(el('p', { 'class': 'help', text: s.help }));
       s.fields.forEach(function (f) {
         card.appendChild(el('label', { 'for': 'f-' + f.key, text: f.label }));
@@ -313,7 +348,12 @@
       var btn = el('button', { id: 'test-' + s.id, type: 'button', text: 'Test' });
       var res = el('p', { id: 'result-' + s.id, 'class': 'result', 'aria-live': 'polite' });
       btn.addEventListener('click', function () { runTest(s, btn, res); });
-      card.appendChild(el('div', { 'class': 'test-row' }, [btn, res]));
+      var row = [btn, res];
+      if (s.id === 'discord') {
+        row.splice(1, 0, el('a', { id: 'invite-link', href: '#', target: '_blank', rel: 'noopener noreferrer', hidden: '',
+                                   text: 'Invite the bot to your server' }));
+      }
+      card.appendChild(el('div', { 'class': 'test-row' }, row));
       host.appendChild(card);
     });
     host.appendChild(buildMessagesCard());
@@ -426,7 +466,77 @@
       fillSettings(rs[0].data);
       renderStatus(rs[1].data);
       show('main-view');
+      refreshInvite();
+      startHealth(false);
     });
+  }
+
+  // ---- health dots: the server answers from a cache, so this only reads; every 30 s while visible ----
+  var HEALTH_SECTIONS = ['discord', 'plex', 'tautulli', 'radarr', 'sonarr'];
+  var HEALTH_EVERY_MS = 30000;
+  var HEALTH_SOON_MS = 3000;
+  var healthGen = 0;
+  var healthTimer = null;
+
+  function renderHealth(data) {
+    var anyUnknown = false;
+    healthStates = {};
+    HEALTH_SECTIONS.forEach(function (id) {
+      var h = data && data[id] ? data[id] : {};
+      var st = HEALTH_LABELS.hasOwnProperty(h.state) ? h.state : 'unknown';
+      var msg = typeof h.message === 'string' ? h.message : '';
+      var node = $('health-' + id);
+      if (!node) { return; }
+      anyUnknown = anyUnknown || st === 'unknown';
+      healthStates[id] = st;
+      node.className = 'health state-' + st;
+      node.title = msg;
+      node.querySelector('.health-label').textContent = HEALTH_LABELS[st];
+      node.querySelector('.sr-only').textContent = msg ? ': ' + msg : '';
+    });
+    renderChecklist();
+    return anyUnknown;
+  }
+
+  function stopHealth() {
+    healthGen++;
+    clearTimeout(healthTimer);
+  }
+
+  function startHealth(refresh) {
+    stopHealth();
+    healthTick(healthGen, refresh);
+  }
+
+  function healthTick(gen, refresh) {
+    if (gen !== healthGen || document.hidden || $('main-view').hidden) { return; }
+    var again = HEALTH_EVERY_MS;
+    api('GET', '/api/health' + (refresh ? '?refresh=1' : '')).then(function (r) {
+      if (gen !== healthGen) { return; }
+      if (r.status === 200 && renderHealth(r.data)) { again = HEALTH_SOON_MS; }
+    }).then(function () {
+      if (gen !== healthGen) { return; }
+      return api('GET', '/api/status').then(function (s) { if (gen === healthGen && s.status === 200) { renderStatus(s.data); } });
+    }).catch(function () { }).then(function () {
+      if (gen === healthGen) { healthTimer = setTimeout(function () { healthTick(gen, false); }, again); }
+    });
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { stopHealth(); }
+    else if (!$('main-view').hidden) { startHealth(false); }
+  });
+
+  // The invite link is built by the server from the saved token; it is hidden when there is none.
+  var INVITE_PREFIX = 'https://discord.com/oauth2/authorize?';
+
+  function refreshInvite() {
+    return api('GET', '/api/invite').then(function (r) {
+      var a = $('invite-link');
+      var url = r.status === 200 && typeof r.data.url === 'string' ? r.data.url : '';
+      if (url.indexOf(INVITE_PREFIX) === 0) { a.setAttribute('href', url); a.hidden = false; }
+      else { a.removeAttribute('href'); a.hidden = true; }
+    }).catch(function () { });
   }
 
   function fillSettings(data) {
@@ -464,7 +574,58 @@
     setItem('status-set', 'Status message', d.statusSet);
     setItem('queue-set', 'Queue message', d.queueSet);
     setItem('role-set', 'Role message', d.roleSet);
+    lastStatus = d;
+    renderChecklist();
   }
+
+  // ---- first-run checklist ----
+  function stepMark(done) {
+    var mark = el('span', { 'class': 'mark' });
+    if (done) {
+      mark.appendChild(el('span', { 'class': 'tick', 'aria-hidden': 'true', text: '\u2713' }));
+      mark.appendChild(el('span', { 'class': 'sr-only', text: 'Done: ' }));
+    } else {
+      mark.appendChild(el('span', { 'class': 'todo', 'aria-hidden': 'true', text: '\u25cb' }));
+      mark.appendChild(el('span', { 'class': 'sr-only', text: 'To do: ' }));
+    }
+    return mark;
+  }
+
+  function renderChecklist() {
+    if (!lastStatus) { return; }
+    var list = $('checklist-steps');
+    while (list.firstChild) { list.removeChild(list.firstChild); }
+    var requiredDone = true;
+    CHECKLIST_STEPS.forEach(function (step, i) {
+      var done = !!step.done(lastStatus);
+      if (i < REQUIRED_STEPS && !done) { requiredDone = false; }
+      var body = el('div', { 'class': 'step-body' }, [
+        el('span', { 'class': 'step-title', text: step.text + (step.optional ? ' (optional)' : '') })]);
+      if (!done) { body.appendChild(el('p', { 'class': 'help', text: step.how })); }
+      list.appendChild(el('li', { 'class': done ? 'done' : '' }, [stepMark(done), body]));
+    });
+    // While Plex is still being checked nothing is known yet, so the card is not opened by surprise.
+    var waiting = healthStates.plex === undefined || healthStates.plex === 'unknown';
+    var showCard = checklistForced || (!checklistDismissed && !requiredDone && !waiting);
+    $('setup-checklist').hidden = !showCard;
+    $('checklist-show').hidden = showCard;
+  }
+
+  $('checklist-hide').addEventListener('click', function () {
+    checklistDismissed = true;
+    checklistForced = false;
+    try { localStorage.setItem(CHECKLIST_KEY, '1'); } catch (e) { }
+    renderChecklist();
+    $('checklist-show').focus();
+  });
+
+  $('checklist-show').addEventListener('click', function () {
+    checklistDismissed = false;
+    checklistForced = true;
+    try { localStorage.removeItem(CHECKLIST_KEY); } catch (e) { }
+    renderChecklist();
+    $('checklist-hide').focus();
+  });
 
   function setResult(node, ok, msg) {
     node.className = 'result' + (ok === null ? '' : ok ? ' ok' : ' bad');
@@ -518,6 +679,8 @@
         setResult(out, null, 'Saved. Starting the bot...');
         return api('GET', '/api/settings').then(function (s) {
           if (s.status === 200) { fillSettings(s.data); }
+          refreshInvite();
+          startHealth(true);
           return pollStatus(out, Date.now(), pollGen);
         });
       })
