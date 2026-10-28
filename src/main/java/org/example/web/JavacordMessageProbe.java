@@ -5,8 +5,10 @@ import org.javacord.api.DiscordApi;
 import org.javacord.api.entity.channel.ServerTextChannel;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.Message;
+import org.javacord.api.entity.permission.PermissionType;
 import org.javacord.api.entity.permission.Role;
 import org.javacord.api.entity.server.Server;
+import org.javacord.api.entity.user.User;
 import org.javacord.api.exception.MissingPermissionsException;
 import org.javacord.api.exception.NotFoundException;
 
@@ -27,6 +29,8 @@ public class JavacordMessageProbe implements MessageProbe
 	static final String FAILED = "Could not check the message";
 	static final String TIMED_OUT = "Timed out after 10 seconds";
 	static final String NO_ROLE = "That role was not found in the server of that channel";
+	static final String NOT_SERVER_TEXT = "That is not a text channel in a server";
+	static final String FAILED_CHANNEL = "Could not check the channel";
 	private static final long TIMEOUT_SECONDS = 10;
 
 	private final Supplier<DiscordApi> live;
@@ -87,6 +91,49 @@ public class JavacordMessageProbe implements MessageProbe
 		catch (RuntimeException e)
 		{
 			return new CheckResult(false, FAILED);
+		}
+	}
+
+	/** Pure decision from what the bot may do in the channel. The name is remote text; the page renders it as text. */
+	static CheckResult channelVerdict(String channelName, boolean canSee, boolean canSend, boolean canEmbed)
+	{
+		if (!canSee)
+		{
+			return new CheckResult(false, NO_CHANNEL);
+		}
+		if (!canSend)
+		{
+			return new CheckResult(false, "The bot is not allowed to send messages in #" + channelName);
+		}
+		if (!canEmbed)
+		{
+			return new CheckResult(false, "The bot is not allowed to embed links in #" + channelName);
+		}
+		return new CheckResult(true, "Found #" + channelName + ". The bot can post here.");
+	}
+
+	@Override
+	public CheckResult probeChannel(String channelId)
+	{
+		DiscordApi api = live.get();
+		if (api == null)
+		{
+			return new CheckResult(false, NOT_CONNECTED);
+		}
+		try
+		{
+			Optional<ServerTextChannel> channel = api.getServerTextChannelById(channelId);
+			if (channel.isEmpty())
+			{
+				return new CheckResult(false, api.getTextChannelById(channelId).isPresent() ? NOT_SERVER_TEXT : NO_CHANNEL);
+			}
+			ServerTextChannel c = channel.get();
+			User me = api.getYourself();
+			return channelVerdict(c.getName(), c.canSee(me), c.canWrite(me), c.hasPermission(me, PermissionType.EMBED_LINKS));
+		}
+		catch (RuntimeException e)
+		{
+			return new CheckResult(false, FAILED_CHANNEL);
 		}
 	}
 

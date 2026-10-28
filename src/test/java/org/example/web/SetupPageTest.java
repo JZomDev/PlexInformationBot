@@ -76,7 +76,7 @@ class SetupPageTest
 	{
 		String js = resource("app.js");
 		String html = resource("index.html");
-		assertTrue(html.contains("id=\"announce-set\""));
+		assertTrue(html.contains("<a id=\"announce-set\" href=\"#messages-announce\" data-group=\"announce\""));
 		assertTrue(js.contains("announceMoviesOn"));
 		assertTrue(js.contains("announceSeasonsOn"));
 		assertTrue(js.contains("Announce new movies"));

@@ -10,4 +10,10 @@ public interface MessageProbe
 	{
 		return new CheckResult(false, "The role cannot be checked");
 	}
+
+	/** Whether the channel exists and the bot can post an embed there. Posts nothing. */
+	default CheckResult probeChannel(String channelId)
+	{
+		return new CheckResult(false, "The channel cannot be checked");
+	}
 }

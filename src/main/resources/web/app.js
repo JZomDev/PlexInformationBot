@@ -42,7 +42,12 @@
         + ' The role ID is under Server Settings, Roles: right-click the role and choose Copy Role ID.',
       fields: [{ key: 'roleId', label: 'Role ID', inputmode: 'numeric' },
                { key: 'roleChannelId', label: 'Role channel ID', inputmode: 'numeric' },
-               { key: 'roleMessageId', label: 'Role message ID', inputmode: 'numeric' }] }
+               { key: 'roleMessageId', label: 'Role message ID', inputmode: 'numeric' }] },
+    { id: 'announce', title: 'Announcements channel', channelKey: 'announceChannelId',
+      help: 'The channel where the bot posts new movie and season announcements. /setupannouncements, run in a channel, saves it for you. '
+        + 'To enter it here, turn on Developer Mode in Discord (User Settings, Advanced), right-click the channel and choose Copy Channel ID. '
+        + 'Test checks that the bot can see the channel and post there; it posts nothing.',
+      fields: [{ key: 'announceChannelId', label: 'Announcements channel ID', inputmode: 'numeric' }] }
   ];
   var LINK_RE = /^https:\/\/(?:www\.|ptb\.|canary\.)?discord(?:app)?\.com\/channels\/(\d+)\/(\d+)\/(\d+)$/;
   var STATE_LABELS = { NOT_CONFIGURED: 'not configured', STARTING: 'starting', RUNNING: 'running', FAILED: 'failed' };
@@ -231,7 +236,8 @@
   // Hidden fields stay in the page, so saving never clears them.
   function applyMode() {
     Array.prototype.forEach.call(document.querySelectorAll('.adv-only'), function (n) { n.hidden = !advanced; });
-    ['status', 'queue', 'role'].forEach(function (id) {
+    MESSAGE_GROUPS.forEach(function (g) {
+      var id = g.id;
       var a = $(id + '-set');
       if (advanced) { a.setAttribute('href', '#messages-' + id); a.setAttribute('aria-haspopup', 'dialog'); a.classList.remove('plain'); }
       else { a.removeAttribute('href'); a.removeAttribute('aria-haspopup'); a.classList.add('plain'); }
@@ -380,14 +386,16 @@
     MESSAGE_GROUPS.forEach(function (g) {
       var box = el('div', { id: 'messages-' + g.id, 'class': 'group', role: 'group', 'aria-labelledby': 'h-messages', hidden: '' });
       box.appendChild(el('p', { 'class': 'help', text: g.help }));
-      box.appendChild(el('label', { 'for': 'link-' + g.id, text: 'Paste message link (fills the channel and message ID below)' }));
-      var link = el('input', { id: 'link-' + g.id, type: 'text', autocomplete: 'off', autocapitalize: 'off',
-                               spellcheck: 'false', 'aria-describedby': 'link-error-' + g.id });
-      box.appendChild(link);
-      var linkErr = el('p', { id: 'link-error-' + g.id, 'class': 'error', 'aria-live': 'polite' });
-      box.appendChild(linkErr);
-      link.addEventListener('input', function () { applyLink(g, link, linkErr); });
-      link.addEventListener('change', function () { applyLink(g, link, linkErr); });
+      if (g.messageKey) {
+        box.appendChild(el('label', { 'for': 'link-' + g.id, text: 'Paste message link (fills the channel and message ID below)' }));
+        var link = el('input', { id: 'link-' + g.id, type: 'text', autocomplete: 'off', autocapitalize: 'off',
+                                 spellcheck: 'false', 'aria-describedby': 'link-error-' + g.id });
+        box.appendChild(link);
+        var linkErr = el('p', { id: 'link-error-' + g.id, 'class': 'error', 'aria-live': 'polite' });
+        box.appendChild(linkErr);
+        link.addEventListener('input', function () { applyLink(g, link, linkErr); });
+        link.addEventListener('change', function () { applyLink(g, link, linkErr); });
+      }
       g.fields.forEach(function (f) {
         box.appendChild(el('label', { 'for': 'f-' + f.key, text: f.label }));
         box.appendChild(el('input', { id: 'f-' + f.key, name: f.key, type: 'text', inputmode: 'numeric',
@@ -413,7 +421,8 @@
   var openGroup = null;
 
   function markLinks() {
-    ['status', 'queue', 'role'].forEach(function (id) {
+    MESSAGE_GROUPS.forEach(function (g) {
+      var id = g.id;
       var a = $(id + '-set');
       if (advanced) { a.setAttribute('aria-expanded', openGroup === id ? 'true' : 'false'); }
       else { a.removeAttribute('aria-expanded'); }
@@ -448,10 +457,10 @@
     $('f-' + g.fields[0].key).focus();
   }
 
-  ['status', 'queue', 'role'].forEach(function (id) {
-    $(id + '-set').addEventListener('click', function (ev) {
+  MESSAGE_GROUPS.forEach(function (g) {
+    $(g.id + '-set').addEventListener('click', function (ev) {
       ev.preventDefault();
-      if (advanced) { goToGroup(id); }
+      if (advanced) { goToGroup(g.id); }
     });
   });
 

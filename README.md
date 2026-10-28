@@ -63,11 +63,12 @@ Normally `/setupstatus`, `/setupcontentqueue` and `/setupreact` post a new messa
 - In Discord turn on Developer Mode (User Settings, Advanced), right-click the message and choose Copy Message Link. Paste it into "Paste message link" in the matching group and the channel and message IDs are filled in for you. The role ID is separate: in Server Settings, Roles, right-click the role and choose Copy Role ID.
 - The IDs are the long numbers Discord shows (17 to 20 digits). Anything else is refused when you save.
 - Click Test in a group to check, with the running bot, that the channel and message exist and that the bot wrote the message (a bot can only edit its own messages). For the role message it also checks that the role can be handed out. Test needs the bot to be connected, so save the Discord token first.
+- The Announcements item opens a group with just the channel ID, for the channel where new movie and season announcements are posted (`/setupannouncements` saves it too). Copy the ID the same way: right-click the channel and choose Copy Channel ID. Test checks, with the running bot, that the channel exists, that the bot can see it, and that it may send messages and embed links there. It posts nothing to the channel.
 - Only fields you change are saved, so a message set up by a slash command in the meantime is not overwritten by an older copy of the page. Emptying a field clears it.
 
 ## Advanced mode
 
-The setup page starts in basic mode: only the Discord token and Plex sections are shown, and the status line at the top (Status, Queue and Role message) is plain text. Tick "Advanced mode" in the header to also show Tautulli, Radarr, Sonarr, and to make the status line items links. Clicking one opens a popup with just that group (status, queue or role); the popup has its own Save button, and Done, the X, Escape or a click outside closes it. The choice is remembered in your browser. Switching modes never clears anything: fields that are hidden keep their saved values.
+The setup page starts in basic mode: only the Discord token and Plex sections are shown, and the status line at the top (Status, Queue and Role message, and Announcements) is plain text. Tick "Advanced mode" in the header to also show Tautulli, Radarr, Sonarr, and to make the status line items links. Clicking one opens a popup with just that group (status, queue, role or announcements); the popup has its own Save button, and Done, the X, Escape or a click outside closes it. The choice is remembered in your browser. Switching modes never clears anything: fields that are hidden keep their saved values.
 
 ## Logs
 

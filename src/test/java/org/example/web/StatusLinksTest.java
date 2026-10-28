@@ -23,12 +23,25 @@ class StatusLinksTest
 	{
 		String html = resource("index.html");
 		String js = resource("app.js");
-		for (String id : new String[] {"status", "queue", "role"})
+		for (String id : new String[] {"status", "queue", "role", "announce"})
 		{
 			assertTrue(html.contains("<a id=\"" + id + "-set\" href=\"#messages-" + id + "\""), id);
 			assertTrue(js.contains("'messages-' + g.id"));
 		}
 		assertTrue(js.contains("id: 'messages'"));
+	}
+
+	@Test
+	void announceGroupHasOneChannelFieldAndNoMessageBox() throws Exception
+	{
+		String js = resource("app.js");
+		assertTrue(js.contains("{ id: 'announce', title: 'Announcements channel'"));
+		assertTrue(js.contains("{ key: 'announceChannelId', label: 'Announcements channel ID', inputmode: 'numeric' }"));
+		assertTrue(js.contains("/setupannouncements"));
+		assertTrue(js.contains("Copy Channel ID"));
+		assertTrue(js.contains("if (g.messageKey)"));
+		assertFalse(js.contains("['status', 'queue', 'role']"));
+		assertTrue(js.contains("MESSAGE_GROUPS.forEach(function (g) {\n      var id = g.id;"));
 	}
 
 	@Test
