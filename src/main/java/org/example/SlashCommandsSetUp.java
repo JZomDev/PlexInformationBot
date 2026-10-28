@@ -18,11 +18,6 @@ public class SlashCommandsSetUp
 			.setDescription("Stream count")
 			.setDefaultEnabledForPermissions(PermissionType.ADMINISTRATOR)
 		);
-		builders.add(new SlashCommandBuilder().setName("setupannouncements")
-			.setDescription("Send announcements here")
-			.setDefaultEnabledForPermissions(PermissionType.ADMINISTRATOR)
-			.setEnabledInDms(false)
-		);
 
 		return builders;
 	}
@@ -45,6 +40,11 @@ public class SlashCommandsSetUp
 		);
 		builders.add(new SlashCommandBuilder().setName("setupcontentqueue")
 			.setDescription("Post the content queue message here")
+			.setDefaultEnabledForPermissions(PermissionType.ADMINISTRATOR)
+			.setEnabledInDms(false)
+		);
+		builders.add(new SlashCommandBuilder().setName("setupannouncements")
+			.setDescription("Send announcements here")
 			.setDefaultEnabledForPermissions(PermissionType.ADMINISTRATOR)
 			.setEnabledInDms(false)
 		);
