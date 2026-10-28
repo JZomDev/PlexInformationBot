@@ -16,7 +16,7 @@ class RestartSerialisationTest
 {
 	private static Settings withToken(String token)
 	{
-		return new Settings(token, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "");
+		return new Settings(token, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "");
 	}
 
 	@Test

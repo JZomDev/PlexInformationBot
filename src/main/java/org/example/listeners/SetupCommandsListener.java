@@ -44,17 +44,19 @@ public class SetupCommandsListener implements SlashCommandCreateListener
 				return new Settings(s.botToken(), s.plexIp(), s.plexPort(), s.plexToken(), s.tautulliUrl(),
 						s.tautulliApiKey(), s.radarrUrl(), s.radarrApiKey(), s.sonarrUrl(), s.sonarrApiKey(),
 						roleId, channelId, messageId, s.statusChannelId(), s.statusMessageId(),
-						s.queueChannelId(), s.queueMessageId());
+						s.queueChannelId(), s.queueMessageId(),
+						s.announceChannelId(), s.announceMoviesOn(), s.announceSeasonsOn());
 			case "setupstatus":
 				return new Settings(s.botToken(), s.plexIp(), s.plexPort(), s.plexToken(), s.tautulliUrl(),
 						s.tautulliApiKey(), s.radarrUrl(), s.radarrApiKey(), s.sonarrUrl(), s.sonarrApiKey(),
 						s.roleId(), s.roleChannelId(), s.roleMessageId(), channelId, messageId,
-						s.queueChannelId(), s.queueMessageId());
+						s.queueChannelId(), s.queueMessageId(),
+						s.announceChannelId(), s.announceMoviesOn(), s.announceSeasonsOn());
 			case "setupcontentqueue":
 				return new Settings(s.botToken(), s.plexIp(), s.plexPort(), s.plexToken(), s.tautulliUrl(),
 						s.tautulliApiKey(), s.radarrUrl(), s.radarrApiKey(), s.sonarrUrl(), s.sonarrApiKey(),
 						s.roleId(), s.roleChannelId(), s.roleMessageId(), s.statusChannelId(), s.statusMessageId(),
-						channelId, messageId);
+						channelId, messageId, s.announceChannelId(), s.announceMoviesOn(), s.announceSeasonsOn());
 			default:
 				return s;
 		}

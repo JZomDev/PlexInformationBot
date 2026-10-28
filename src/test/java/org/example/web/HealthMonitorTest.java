@@ -87,7 +87,7 @@ class HealthMonitorTest
 	private static Settings of(String bot, String tautulliUrl, String tautulliKey)
 	{
 		return new Settings(bot, "10.0.0.5", "32400", PLEX_TOKEN, tautulliUrl, tautulliKey, "", "", "", "", "", "", "",
-				"", "", "", "");
+				"", "", "", "", "", "", "");
 	}
 
 	private Settings settings = of("", "", "");

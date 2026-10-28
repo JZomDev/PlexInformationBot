@@ -6,7 +6,8 @@ public record Settings(String botToken, String plexIp, String plexPort, String p
 					   String tautulliUrl, String tautulliApiKey, String radarrUrl, String radarrApiKey,
 					   String sonarrUrl, String sonarrApiKey, String roleId, String roleChannelId,
 					   String roleMessageId, String statusChannelId, String statusMessageId,
-					   String queueChannelId, String queueMessageId)
+					   String queueChannelId, String queueMessageId, String announceChannelId,
+					   String announceMoviesOn, String announceSeasonsOn)
 {
 	public static final String MASK = "********";
 
@@ -29,6 +30,9 @@ public record Settings(String botToken, String plexIp, String plexPort, String p
 		statusMessageId = nz(statusMessageId);
 		queueChannelId = nz(queueChannelId);
 		queueMessageId = nz(queueMessageId);
+		announceChannelId = nz(announceChannelId);
+		announceMoviesOn = nz(announceMoviesOn);
+		announceSeasonsOn = nz(announceSeasonsOn);
 	}
 
 	private static String nz(String value)
@@ -38,7 +42,7 @@ public record Settings(String botToken, String plexIp, String plexPort, String p
 
 	public static Settings empty()
 	{
-		return new Settings("", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "");
+		return new Settings("", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "");
 	}
 
 	public static Settings fromEnv(Map<String, String> env)
@@ -48,7 +52,7 @@ public record Settings(String botToken, String plexIp, String plexPort, String p
 				env.get("TAUTULLI_URL"), env.get("API_KEY"), env.get("RADARR_URL"), env.get("RADARR_API"),
 				env.get("SONARR_URL"), env.get("SONARR_API"), env.get("ROLE_ID"), "", "",
 				env.get("TEXT_CHANNELID"), env.get("MESSAGEID"),
-				env.get("QUEUE_TEXT_CHANNELID"), env.get("QUEUEMESSAGEID"));
+				env.get("QUEUE_TEXT_CHANNELID"), env.get("QUEUEMESSAGEID"), "", "", "");
 	}
 
 	private static String pick(String file, String base)
@@ -67,7 +71,9 @@ public record Settings(String botToken, String plexIp, String plexPort, String p
 				pick(f.sonarrApiKey, sonarrApiKey), pick(f.roleId, roleId),
 				pick(f.roleChannelId, roleChannelId), pick(f.roleMessageId, roleMessageId),
 				pick(f.statusChannelId, statusChannelId), pick(f.statusMessageId, statusMessageId),
-				pick(f.queueChannelId, queueChannelId), pick(f.queueMessageId, queueMessageId));
+				pick(f.queueChannelId, queueChannelId), pick(f.queueMessageId, queueMessageId),
+				pick(f.announceChannelId, announceChannelId), pick(f.announceMoviesOn, announceMoviesOn),
+				pick(f.announceSeasonsOn, announceSeasonsOn));
 	}
 
 	private static String mask(String secret)
@@ -80,7 +86,7 @@ public record Settings(String botToken, String plexIp, String plexPort, String p
 		return new Settings(mask(botToken), plexIp, plexPort, mask(plexToken), tautulliUrl,
 				mask(tautulliApiKey), radarrUrl, mask(radarrApiKey), sonarrUrl, mask(sonarrApiKey),
 				roleId, roleChannelId, roleMessageId, statusChannelId, statusMessageId,
-				queueChannelId, queueMessageId);
+				queueChannelId, queueMessageId, announceChannelId, announceMoviesOn, announceSeasonsOn);
 	}
 
 	private static String keep(String submitted, String saved)
@@ -95,7 +101,8 @@ public record Settings(String botToken, String plexIp, String plexPort, String p
 				s.tautulliUrl, keep(s.tautulliApiKey, tautulliApiKey), s.radarrUrl,
 				keep(s.radarrApiKey, radarrApiKey), s.sonarrUrl, keep(s.sonarrApiKey, sonarrApiKey),
 				s.roleId, s.roleChannelId, s.roleMessageId, s.statusChannelId, s.statusMessageId,
-				s.queueChannelId, s.queueMessageId);
+				s.queueChannelId, s.queueMessageId, s.announceChannelId, s.announceMoviesOn,
+					s.announceSeasonsOn);
 	}
 
 	private static String host(String value)
@@ -123,7 +130,18 @@ public record Settings(String botToken, String plexIp, String plexPort, String p
 	{
 		return new Settings(botToken, host(plexIp), plexPort, plexToken, host(tautulliUrl), tautulliApiKey,
 				host(radarrUrl), radarrApiKey, host(sonarrUrl), sonarrApiKey, roleId, roleChannelId,
-				roleMessageId, statusChannelId, statusMessageId, queueChannelId, queueMessageId);
+				roleMessageId, statusChannelId, statusMessageId, queueChannelId, queueMessageId, announceChannelId, announceMoviesOn,
+				announceSeasonsOn);
+	}
+
+	public boolean announceMovies()
+	{
+		return "true".equals(announceMoviesOn) && !announceChannelId.isBlank();
+	}
+
+	public boolean announceSeasons()
+	{
+		return "true".equals(announceSeasonsOn) && !announceChannelId.isBlank();
 	}
 
 	private static final String BAD_ID = " must be the number Discord shows, 17 to 20 digits";
@@ -155,9 +173,9 @@ public record Settings(String botToken, String plexIp, String plexPort, String p
 	public java.util.Optional<String> invalidIdField()
 	{
 		String[] labels = {"Role ID", "Role channel ID", "Role message ID", "Status channel ID",
-				"Status message ID", "Queue channel ID", "Queue message ID"};
+				"Status message ID", "Queue channel ID", "Queue message ID", "Announcement channel ID"};
 		String[] values = {roleId, roleChannelId, roleMessageId, statusChannelId, statusMessageId,
-				queueChannelId, queueMessageId};
+				queueChannelId, queueMessageId, announceChannelId};
 		for (int i = 0; i < labels.length; i++)
 		{
 			if (!snowflake(values[i]))
@@ -173,6 +191,7 @@ public record Settings(String botToken, String plexIp, String plexPort, String p
 	{
 		return new Settings(botToken, plexIp, plexPort, plexToken, tautulliUrl, tautulliApiKey, radarrUrl,
 				radarrApiKey, sonarrUrl, sonarrApiKey, roleId.strip(), roleChannelId.strip(), roleMessageId.strip(),
-				statusChannelId.strip(), statusMessageId.strip(), queueChannelId.strip(), queueMessageId.strip());
+				statusChannelId.strip(), statusMessageId.strip(), queueChannelId.strip(), queueMessageId.strip(),
+				announceChannelId.strip(), announceMoviesOn, announceSeasonsOn);
 	}
 }
