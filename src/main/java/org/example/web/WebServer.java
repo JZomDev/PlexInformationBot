@@ -71,7 +71,7 @@ public class WebServer
 		this.bot = bot;
 		this.messages = messages;
 		this.health = new HealthMonitor(settings::effective, checks, bot::state, healthExecutor,
-				System::currentTimeMillis);
+				System::currentTimeMillis, bot::announcementResult);
 		routes.put("/api/session", new Api("GET", false, true, this::session));
 		routes.put("/api/login", new Api("POST", false, true, (ex, s) -> login(ex)));
 		routes.put("/api/logout", new Api("POST", false, true, this::logout));

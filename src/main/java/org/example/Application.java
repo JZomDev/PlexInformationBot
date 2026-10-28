@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -30,6 +31,8 @@ import kekolab.javaplex.PlexMediatag;
 import kekolab.javaplex.PlexStatus;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.example.announce.AnnouncementService;
+import org.example.announce.Announcer;
 import org.example.bot.BotController;
 import org.example.bot.BotLifecycle;
 import org.example.bot.BotState;
@@ -75,6 +78,16 @@ public class Application implements BotController
 	private final SessionCache<List<PlexMediatag<?>>> sessionCache =
 			new SessionCache<>(this::loadSessions, System::currentTimeMillis, SESSION_CACHE_MS);
 	private final AtomicBoolean queueEmbedTaskRunning = new AtomicBoolean(false);
+
+	/** This connection's announcement service, or null while there is no connection. */
+	private volatile AnnouncementService announcements;
+
+	@Override
+	public Optional<Announcer.Result> announcementResult()
+	{
+		AnnouncementService service = announcements;
+		return service == null ? Optional.empty() : service.lastResult();
+	}
 
 	/** The connected bot while a connection is open, else null. */
 	private volatile DiscordApi liveApi;
@@ -213,6 +226,7 @@ public class Application implements BotController
 		}
 		return () -> {
 			liveApi = null;
+			announcements = null;
 			currentRegistrations = null;
 			service.shutdownNow();
 			try
@@ -260,6 +274,13 @@ public class Application implements BotController
 		CountPlexUsersWorker countPlexUsersWorker = new CountPlexUsersWorker();
 		PlexInformationWorker plexInformationWorker = new PlexInformationWorker();
 		DownloadQueueWorker downloadQueueWorker = new DownloadQueueWorker();
+		SettingsStore store = settingsStore;
+		if (store != null)
+		{
+			AnnouncementService announcementService = AnnouncementService.create(api, AppConfig::get, store.dir());
+			announcements = announcementService;
+			mService.scheduleWithFixedDelay(announcementService::tick, 0, 90, TimeUnit.SECONDS);
+		}
 
 		mService.scheduleWithFixedDelay(() -> {
 				// Perform your recurring method calls in here.

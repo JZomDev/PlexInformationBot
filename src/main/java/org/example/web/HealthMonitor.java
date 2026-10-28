@@ -1,10 +1,12 @@
 package org.example.web;
 
+import org.example.announce.Announcer;
 import org.example.bot.BotState;
 import org.example.config.Settings;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.function.LongSupplier;
@@ -33,6 +35,7 @@ final class HealthMonitor
 	private final Supplier<BotState> bot;
 	private final Executor executor;
 	private final LongSupplier clock;
+	private final Supplier<Optional<Announcer.Result>> announcements;
 	private final Map<String, Health> results = new ConcurrentHashMap<>();
 	private final Map<String, Long> inFlight = new ConcurrentHashMap<>();
 	private final Object lock = new Object();
@@ -42,6 +45,13 @@ final class HealthMonitor
 	HealthMonitor(Supplier<Settings> settings, ConnectionChecks checks, Supplier<BotState> bot, Executor executor,
 				  LongSupplier clock)
 	{
+		this(settings, checks, bot, executor, clock, Optional::empty);
+	}
+
+	HealthMonitor(Supplier<Settings> settings, ConnectionChecks checks, Supplier<BotState> bot, Executor executor,
+				  LongSupplier clock, Supplier<Optional<Announcer.Result>> announcements)
+	{
+		this.announcements = announcements;
 		this.settings = settings;
 		this.checks = checks;
 		this.bot = bot;
@@ -57,7 +67,7 @@ final class HealthMonitor
 		Map<String, Health> out = new LinkedHashMap<>();
 		for (String section : CHECKED)
 		{
-			out.put(section, configured(section, s) ? results.getOrDefault(section, UNKNOWN) : UNSET);
+			out.put(section, configured(section, s) ? withAnnouncements(section, s) : UNSET);
 		}
 		out.put("discord", discord(s));
 		return out;
@@ -135,6 +145,22 @@ final class HealthMonitor
 				results.put(section, h);
 			}
 		}
+	}
+
+	/** The cached check result, except that a service the announcer cannot reach is down while announcing. */
+	private Health withAnnouncements(String section, Settings s)
+	{
+		boolean movies = "radarr".equals(section);
+		if (movies || "sonarr".equals(section))
+		{
+			Optional<Announcer.Result> last = announcements.get();
+			if (last.isPresent() && (movies ? s.announceMovies() && last.get().moviesFailed()
+					: s.announceSeasons() && last.get().seasonsFailed()))
+			{
+				return new Health("down", "Announcements cannot reach this service");
+			}
+		}
+		return results.getOrDefault(section, UNKNOWN);
 	}
 
 	private Health discord(Settings s)

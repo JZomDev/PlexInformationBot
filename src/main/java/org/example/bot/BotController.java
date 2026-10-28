@@ -1,6 +1,9 @@
 package org.example.bot;
 
+import org.example.announce.Announcer;
 import org.example.config.Settings;
+
+import java.util.Optional;
 
 public interface BotController
 {
@@ -12,5 +15,11 @@ public interface BotController
 	default boolean setupCommandsRegistered()
 	{
 		return false;
+	}
+
+	/** The last announcement cycle's outcome on the current connection, if one has run. */
+	default Optional<Announcer.Result> announcementResult()
+	{
+		return Optional.empty();
 	}
 }
