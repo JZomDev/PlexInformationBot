@@ -340,4 +340,27 @@ class AnnouncerTest
 		announcer.runCycle(true, true, true);
 		assertEquals(List.of("m1"), sink.keys());
 	}
+
+	@Test
+	void blankItemPresentAtBaselineIsNotAnnouncedWhenFixedLater()
+	{
+		source.movies.add(item("movie", "a", "T", "", 1));
+		announcer.runCycle(true, true, true);
+		assertTrue(store.seen("movie", "a"));
+		source.movies.set(0, item("movie", "a", "T", "http://p/a", 1));
+		announcer.runCycle(true, true, true);
+		assertTrue(sink.posted.isEmpty());
+	}
+
+	@Test
+	void runCycleNeverThrowsOnBadItem()
+	{
+		announcer.runCycle(true, true, true);
+		source.movies.add(movie("m1", 1));
+		source.movies.add(new Item("movie", "m2", "T", 2020, "s", "d", "http://p", null));
+		Announcer.Result r = assertDoesNotThrow(() -> announcer.runCycle(true, true, true));
+		assertTrue(r.moviesFailed());
+		assertTrue(r.seasonsFailed());
+		assertEquals(0, r.posted());
+	}
 }

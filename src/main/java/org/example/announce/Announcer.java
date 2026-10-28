@@ -61,6 +61,20 @@ public final class Announcer
 			return new Result(0, false, false, false);
 		}
 		Set<String> causes = new HashSet<>();
+		try
+		{
+			return cycle(moviesOn, seasonsOn, causes);
+		}
+		catch (RuntimeException e)
+		{
+			causes.add("cycle: " + e);
+			logNewCauses(causes);
+			return new Result(0, true, true, false);
+		}
+	}
+
+	private Result cycle(boolean moviesOn, boolean seasonsOn, Set<String> causes)
+	{
 		List<Item> movies = fetch(MOVIE, causes);
 		List<Item> seasons = fetch(SEASON, causes);
 
@@ -135,7 +149,12 @@ public final class Announcer
 		}
 		for (Item item : items)
 		{
-			if (!valid(item) || isSeen(type, item.key()))
+			if (item == null || isSeen(type, item.key()))
+			{
+				continue;
+			}
+			// At baseline every current item is marked seen, even blank ones.
+			if (baselined && !valid(item))
 			{
 				continue;
 			}
