@@ -667,6 +667,7 @@ public class WebServer
 		body.put("botState", bot.state().name());
 		body.put("queueSet", !e.queueChannelId().isEmpty() && !e.queueMessageId().isEmpty());
 		body.put("statusSet", !e.statusChannelId().isEmpty() && !e.statusMessageId().isEmpty());
+		body.put("announceSet", !e.announceChannelId().isBlank());
 		body.put("roleSet", !e.roleChannelId().isEmpty() && !e.roleMessageId().isEmpty());
 		body.put("setupCommandsRegistered", bot.setupCommandsRegistered());
 		HttpIo.sendJson(ex, 200, body);

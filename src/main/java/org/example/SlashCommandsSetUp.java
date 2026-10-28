@@ -18,6 +18,11 @@ public class SlashCommandsSetUp
 			.setDescription("Stream count")
 			.setDefaultEnabledForPermissions(PermissionType.ADMINISTRATOR)
 		);
+		builders.add(new SlashCommandBuilder().setName("setupannouncements")
+			.setDescription("Send announcements here")
+			.setDefaultEnabledForPermissions(PermissionType.ADMINISTRATOR)
+			.setEnabledInDms(false)
+		);
 
 		return builders;
 	}

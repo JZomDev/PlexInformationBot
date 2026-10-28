@@ -417,6 +417,20 @@ class WebServerTest
 		assertFalse(s.get("queueSet").getAsBoolean());
 		assertFalse(s.get("statusSet").getAsBoolean());
 		assertFalse(s.get("roleSet").getAsBoolean());
+		assertFalse(s.get("announceSet").getAsBoolean());
+	}
+
+	@Test
+	void statusReportsAnnouncementChannelOnceSet() throws Exception
+	{
+		settings.update(saved -> new Settings(saved.botToken(), saved.plexIp(), saved.plexPort(), saved.plexToken(),
+				saved.tautulliUrl(), saved.tautulliApiKey(), saved.radarrUrl(), saved.radarrApiKey(),
+				saved.sonarrUrl(), saved.sonarrApiKey(), saved.roleId(), saved.roleChannelId(), saved.roleMessageId(),
+				saved.statusChannelId(), saved.statusMessageId(), saved.queueChannelId(), saved.queueMessageId(),
+				"123456789012345678", "true", "true"));
+		Client c = loggedInReady();
+		JsonObject s = call("GET", "/api/status", null, c).json();
+		assertTrue(s.get("announceSet").getAsBoolean());
 	}
 
 	@Test

@@ -18,11 +18,13 @@
     { id: 'radarr', title: 'Radarr', optional: true,
       help: 'Enter host:port without http://, for example 192.168.1.10:7878. The API key is under Settings, General.',
       fields: [{ key: 'radarrUrl', label: 'Radarr host:port' },
-               { key: 'radarrApiKey', label: 'Radarr API key', secret: true }] },
+               { key: 'radarrApiKey', label: 'Radarr API key', secret: true }],
+      switches: [{ key: 'announceMoviesOn', label: 'Announce new movies' }] },
     { id: 'sonarr', title: 'Sonarr', optional: true,
       help: 'Enter host:port without http://, for example 192.168.1.10:8989. The API key is under Settings, General.',
       fields: [{ key: 'sonarrUrl', label: 'Sonarr host:port' },
-               { key: 'sonarrApiKey', label: 'Sonarr API key', secret: true }] }
+               { key: 'sonarrApiKey', label: 'Sonarr API key', secret: true }],
+      switches: [{ key: 'announceSeasonsOn', label: 'Announce completed seasons' }] }
   ];
   var COPY_HELP = ' To keep using an existing message, turn on Developer Mode in Discord (User Settings, Advanced), '
     + 'right-click the message and choose Copy Message Link, then paste it below.';
@@ -85,7 +87,7 @@
   // Every field the form can send, in page order.
   function allFields() {
     var out = [];
-    SECTIONS.concat(MESSAGE_GROUPS).forEach(function (s) { out = out.concat(s.fields); });
+    SECTIONS.concat(MESSAGE_GROUPS).forEach(function (s) { out = out.concat(s.fields, s.switches || []); });
     return out;
   }
 
@@ -170,6 +172,7 @@
   // The value a field would be saved with: a revealed, unedited secret counts as unchanged.
   function fieldValue(f) {
     var inp = $('f-' + f.key);
+    if (inp.type === 'checkbox') { return inp.checked ? 'true' : ''; }
     return inp._revealed !== undefined && inp.value === inp._revealed ? initial[f.key] : inp.value;
   }
 
@@ -344,6 +347,10 @@
         var inp = el('input', attrs);
         card.appendChild(inp);
         if (f.secret) { addReveal(inp); }
+      });
+      (s.switches || []).forEach(function (f) {
+        card.appendChild(el('label', { 'class': 'switch', 'for': 'f-' + f.key }, [
+          el('input', { id: 'f-' + f.key, name: f.key, type: 'checkbox' }), document.createTextNode(' ' + f.label)]));
       });
       var btn = el('button', { id: 'test-' + s.id, type: 'button', text: 'Test' });
       var res = el('p', { id: 'result-' + s.id, 'class': 'result', 'aria-live': 'polite' });
@@ -544,8 +551,12 @@
     hideAllReveals();
     allFields().forEach(function (f) {
       var v = data[f.key] == null ? '' : String(data[f.key]);
+      var node = $('f-' + f.key);
+      if (node.type === 'checkbox') {
+        v = v === 'true' ? 'true' : '';
+        node.checked = v === 'true';
+      } else { node.value = v; }
       initial[f.key] = v;
-      $('f-' + f.key).value = v;
     });
     var w = $('warning');
     if (typeof data.warning === 'string' && data.warning) { w.textContent = data.warning; w.hidden = false; }
@@ -568,12 +579,21 @@
     el.appendChild(sr);
   }
 
+  function renderAnnounce(isSet) {
+    var node = $('announce-set');
+    node.textContent = '';
+    if (!isSet) { node.textContent = 'Announcements: not set (run /setupannouncements in a channel)'; return; }
+    node.appendChild(document.createTextNode('Announcements: channel set'));
+    node.appendChild(el('span', { 'class': 'tick', 'aria-hidden': 'true', text: ' \u2713' }));
+  }
+
   function renderStatus(d) {
     var label = STATE_LABELS[d.botState] || String(d.botState || 'unknown').toLowerCase();
     $('bot-state').textContent = 'Bot: ' + label;
     setItem('status-set', 'Status message', d.statusSet);
     setItem('queue-set', 'Queue message', d.queueSet);
     setItem('role-set', 'Role message', d.roleSet);
+    renderAnnounce(d.announceSet === true);
     lastStatus = d;
     renderChecklist();
   }

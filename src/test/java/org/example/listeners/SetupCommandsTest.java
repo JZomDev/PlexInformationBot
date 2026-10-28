@@ -32,6 +32,16 @@ class SetupCommandsTest
 	}
 
 	@Test
+	void setupannouncementsSetsChannelAndBothSwitchesOnly()
+	{
+		Settings a = SetupCommandsListener.apply(base(), "setupannouncements", "C", "", "");
+		assertEquals(new Settings("tok", "ip", "32400", "plex", "tu", "tk", "ru", "rk", "su", "sk",
+				"r0", "rc0", "rm0", "sc0", "sm0", "qc0", "qm0", "C", "true", "true"), a);
+		Settings moved = SetupCommandsListener.apply(a, "setupannouncements", "C2", "", "");
+		assertEquals("C2", moved.announceChannelId());
+	}
+
+	@Test
 	void rerunReplacesIdsAndKeepsOtherSettings()
 	{
 		Settings first = SetupCommandsListener.apply(base(), "setupstatus", "C1", "M1", "");

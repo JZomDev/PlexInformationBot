@@ -57,6 +57,11 @@ public class SetupCommandsListener implements SlashCommandCreateListener
 						s.tautulliApiKey(), s.radarrUrl(), s.radarrApiKey(), s.sonarrUrl(), s.sonarrApiKey(),
 						s.roleId(), s.roleChannelId(), s.roleMessageId(), s.statusChannelId(), s.statusMessageId(),
 						channelId, messageId, s.announceChannelId(), s.announceMoviesOn(), s.announceSeasonsOn());
+			case "setupannouncements":
+				return new Settings(s.botToken(), s.plexIp(), s.plexPort(), s.plexToken(), s.tautulliUrl(),
+						s.tautulliApiKey(), s.radarrUrl(), s.radarrApiKey(), s.sonarrUrl(), s.sonarrApiKey(),
+						s.roleId(), s.roleChannelId(), s.roleMessageId(), s.statusChannelId(), s.statusMessageId(),
+						s.queueChannelId(), s.queueMessageId(), channelId, "true", "true");
 			default:
 				return s;
 		}
@@ -73,7 +78,8 @@ public class SetupCommandsListener implements SlashCommandCreateListener
 	{
 		SlashCommandInteraction interaction = event.getSlashCommandInteraction();
 		String command = interaction.getCommandName();
-		if (!command.equals("setupreact") && !command.equals("setupstatus") && !command.equals("setupcontentqueue"))
+		if (!command.equals("setupreact") && !command.equals("setupstatus") && !command.equals("setupcontentqueue")
+				&& !command.equals("setupannouncements"))
 		{
 			return;
 		}
@@ -118,6 +124,25 @@ public class SetupCommandsListener implements SlashCommandCreateListener
 				return problem;
 			}
 			roleId = role.get().getIdAsString();
+		}
+		if (command.equals("setupannouncements"))
+		{
+			String channelId = channel.get().getIdAsString();
+			try
+			{
+				store.update(saved -> apply(saved, command, channelId, "", ""));
+				AppConfig.reload();
+			}
+			catch (IOException e)
+			{
+				return SAVE_FAILED;
+			}
+			catch (Throwable e)
+			{
+				logger.error("Setup command failed: {}", e.getClass().getSimpleName());
+				return FAILED;
+			}
+			return "Done. Announcements will post in this channel.";
 		}
 		Message message = command.equals("setupreact")
 				? channel.get().sendMessage(Main.DISCORD_MESSAGE).join()

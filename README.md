@@ -19,8 +19,19 @@ Instead of the `config` folder you can use a named volume, for example `-v plexi
    - `/setupreact` (pick the role to hand out) posts the role message.
    - `/setupstatus` posts the status message.
    - `/setupcontentqueue` posts the download queue message.
+   - `/setupannouncements` sends announcements to the channel you run it in (see Announcements below).
 
    These commands are admin-only.
+
+## Announcements
+
+The bot can post a card when Radarr finishes a new movie and when Sonarr has every episode of a season.
+
+- Run `/setupannouncements` (admin-only) in the channel you want. It posts no message; it saves that channel and turns both switches on. Running it again in another channel moves announcements there. There is one announcement channel for the whole bot.
+- On the setup page, "Announce new movies" (Radarr section) and "Announce completed seasons" (Sonarr section) turn each kind on or off. The status line at the top shows "Announcements: channel set" or "not set".
+- The bot checks Radarr and Sonarr every 90 seconds. Posts are silent (no notification pings).
+- The first time you enable announcements nothing already in your library is announced, only what arrives afterwards.
+- A season is announced only once it is complete.
 
 ## Invite link, health dots and setup checklist
 
