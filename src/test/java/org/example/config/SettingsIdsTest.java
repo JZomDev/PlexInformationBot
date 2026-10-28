@@ -11,7 +11,7 @@ class SettingsIdsTest
 	private static Settings withStatusMessage(String id)
 	{
 		Settings e = Settings.empty();
-		return new Settings("", "", "", "", "", "", "", "", "", "", "", "", "", "", id, "", "");
+		return new Settings("", "", "", "", "", "", "", "", "", "", "", "", "", "", id, "", "", "", "", "");
 	}
 
 	private static String digits(int n)
@@ -76,7 +76,7 @@ class SettingsIdsTest
 			java.util.Arrays.fill(v, "");
 			v[10 + i] = bad;
 			Settings s = new Settings(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10], v[11],
-					v[12], v[13], v[14], v[15], v[16]);
+					v[12], v[13], v[14], v[15], v[16], "", "", "");
 			assertTrue(s.invalidIdField().orElseThrow().startsWith(labels[i] + " must"), labels[i]);
 		}
 	}
@@ -84,7 +84,7 @@ class SettingsIdsTest
 	@Test
 	void trimmedIdsLeavesOtherFieldsAlone()
 	{
-		Settings s = new Settings(" tok ", " 1.2.3.4 ", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "");
+		Settings s = new Settings(" tok ", " 1.2.3.4 ", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "");
 		assertEquals(" tok ", s.trimmedIds().botToken());
 		assertEquals(" 1.2.3.4 ", s.trimmedIds().plexIp());
 	}

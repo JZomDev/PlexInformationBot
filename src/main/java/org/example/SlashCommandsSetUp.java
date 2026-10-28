@@ -43,6 +43,11 @@ public class SlashCommandsSetUp
 			.setDefaultEnabledForPermissions(PermissionType.ADMINISTRATOR)
 			.setEnabledInDms(false)
 		);
+		builders.add(new SlashCommandBuilder().setName("setupannouncements")
+			.setDescription("Send announcements here")
+			.setDefaultEnabledForPermissions(PermissionType.ADMINISTRATOR)
+			.setEnabledInDms(false)
+		);
 
 		return builders;
 	}

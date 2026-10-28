@@ -70,4 +70,20 @@ class SetupPageTest
 		assertTrue(js.contains("catch (e)"));
 		assertTrue(css.contains(".checklist li"));
 	}
+
+	@Test
+	void announcementSwitchesAndStatusLineArePresent() throws Exception
+	{
+		String js = resource("app.js");
+		String html = resource("index.html");
+		assertTrue(html.contains("<a id=\"announce-set\" href=\"#messages-announce\" data-group=\"announce\""));
+		assertTrue(js.contains("announceMoviesOn"));
+		assertTrue(js.contains("announceSeasonsOn"));
+		assertTrue(js.contains("Announce new movies"));
+		assertTrue(js.contains("Announce completed seasons"));
+		assertTrue(js.contains("/setupannouncements"));
+		assertTrue(js.contains("Announcements: channel set"));
+		assertTrue(js.contains("d.announceSet"));
+		assertFalse(js.contains("innerHTML"));
+	}
 }

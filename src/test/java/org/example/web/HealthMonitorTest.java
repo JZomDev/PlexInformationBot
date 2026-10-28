@@ -87,7 +87,7 @@ class HealthMonitorTest
 	private static Settings of(String bot, String tautulliUrl, String tautulliKey)
 	{
 		return new Settings(bot, "10.0.0.5", "32400", PLEX_TOKEN, tautulliUrl, tautulliKey, "", "", "", "", "", "", "",
-				"", "", "", "");
+				"", "", "", "", "", "", "");
 	}
 
 	private Settings settings = of("", "", "");
@@ -219,5 +219,59 @@ class HealthMonitorTest
 		{
 			pool.shutdownNow();
 		}
+	}
+
+	private static Settings arr(String on)
+	{
+		return new Settings("tok", "", "", "", "", "", "http://r", "rk", "http://s", "sk", "", "", "", "", "", "", "",
+				"123", on, on);
+	}
+
+	private HealthMonitor withAnnouncer(Settings s, org.example.announce.Announcer.Result r)
+	{
+		return new HealthMonitor(() -> s, checks, () -> bot, exec, () -> now,
+				() -> java.util.Optional.ofNullable(r));
+	}
+
+	@Test
+	void announcementFailureMarksOnlyThatServiceDown()
+	{
+		var r = new org.example.announce.Announcer.Result(0, true, false, false);
+		Map<String, HealthMonitor.Health> m = withAnnouncer(arr("true"), r).snapshot(false);
+		assertEquals("down", state(m, "radarr"));
+		assertEquals("Announcements cannot reach this service", m.get("radarr").message());
+		assertEquals("unknown", state(m, "sonarr"));
+	}
+
+	@Test
+	void announcementFailureIgnoredWhenOffOrHealthy()
+	{
+		var failed = new org.example.announce.Announcer.Result(0, true, true, false);
+		assertEquals("unknown", state(withAnnouncer(arr("false"), failed).snapshot(false), "radarr"));
+		var ok = new org.example.announce.Announcer.Result(1, false, false, true);
+		assertEquals("unknown", state(withAnnouncer(arr("true"), ok).snapshot(false), "radarr"));
+		assertEquals("unknown", state(withAnnouncer(arr("true"), null).snapshot(false), "sonarr"));
+	}
+
+	@Test
+	void sinkFailureShowsOnTheDiscordDot()
+	{
+		var failed = new org.example.announce.Announcer.Result(0, false, false, true);
+		Map<String, HealthMonitor.Health> m = withAnnouncer(arr("true"), failed).snapshot(false);
+		assertEquals("down", state(m, "discord"));
+		assertEquals("Announcements cannot post to the channel", m.get("discord").message());
+		assertEquals("unknown", state(m, "radarr"));
+	}
+
+	@Test
+	void sinkFailureIgnoredWhenOffHealthyOrBotNotRunning()
+	{
+		var failed = new org.example.announce.Announcer.Result(0, false, false, true);
+		assertEquals("ok", state(withAnnouncer(arr("false"), failed).snapshot(false), "discord"));
+		var ok = new org.example.announce.Announcer.Result(0, false, false, false);
+		assertEquals("ok", state(withAnnouncer(arr("true"), ok).snapshot(false), "discord"));
+		bot = BotState.FAILED;
+		assertEquals("Bot could not log in",
+				withAnnouncer(arr("true"), failed).snapshot(false).get("discord").message());
 	}
 }

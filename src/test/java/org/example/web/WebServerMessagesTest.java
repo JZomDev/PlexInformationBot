@@ -54,6 +54,7 @@ class WebServerMessagesTest
 		final List<String> calls = new ArrayList<>();
 		CheckResult result = new CheckResult(true, "Found a message from Bot in #general; the bot can edit it");
 		CheckResult roleResult = new CheckResult(true, "unused");
+		CheckResult channelResult = new CheckResult(true, "Found #general. The bot can post here.");
 
 		@Override
 		public CheckResult probe(String channelId, String messageId)
@@ -67,6 +68,13 @@ class WebServerMessagesTest
 		{
 			calls.add("role|" + roleId + "|" + channelId);
 			return roleResult;
+		}
+
+		@Override
+		public CheckResult probeChannel(String channelId)
+		{
+			calls.add("channel|" + channelId);
+			return channelResult;
 		}
 	}
 
@@ -326,9 +334,89 @@ class WebServerMessagesTest
 	}
 
 	@Test
+	void announceTestChecksTheTypedChannel() throws Exception
+	{
+		ready();
+		Res r = call("POST", "/api/test/announce", ids("announceChannelId", C1));
+		assertEquals(200, r.status(), r.body());
+		assertTrue(r.json().get("ok").getAsBoolean());
+		assertEquals("Found #general. The bot can post here.", r.json().get("message").getAsString());
+		assertEquals(List.of("channel|" + C1), probe.calls);
+	}
+
+	@Test
+	void announceTestReportsAProbeFailureAsGiven() throws Exception
+	{
+		ready();
+		probe.channelResult = new CheckResult(false, "The bot is not allowed to post in that channel");
+		Res r = call("POST", "/api/test/announce", ids("announceChannelId", C1));
+		assertEquals(200, r.status());
+		assertFalse(r.json().get("ok").getAsBoolean());
+		assertEquals("The bot is not allowed to post in that channel", r.json().get("message").getAsString());
+	}
+
+	@Test
+	void announceTestWithBlankOrBadIdDoesNotCallTheProbe() throws Exception
+	{
+		ready();
+		Res blank = call("POST", "/api/test/announce", ids("announceChannelId", "  "));
+		assertFalse(blank.json().get("ok").getAsBoolean());
+		assertEquals("Enter the channel ID first", blank.json().get("message").getAsString());
+		Res none = call("POST", "/api/test/announce", "{}");
+		assertEquals("Enter the channel ID first", none.json().get("message").getAsString());
+		Res bad = call("POST", "/api/test/announce", ids("announceChannelId", "12ab"));
+		assertFalse(bad.json().get("ok").getAsBoolean());
+		assertEquals("Announcement channel ID must be the number Discord shows, 17 to 20 digits",
+				bad.json().get("message").getAsString());
+		assertTrue(probe.calls.isEmpty());
+	}
+
+	@Test
+	void announceTestTypedValueBeatsSavedAndAbsentUsesSaved() throws Exception
+	{
+		ready();
+		assertEquals(200, call("PUT", "/api/settings", ids("announceChannelId", C1)).status());
+		call("POST", "/api/test/announce", "{}");
+		call("POST", "/api/test/announce", ids("announceChannelId", " " + M1 + " "));
+		assertEquals(List.of("channel|" + C1, "channel|" + M1), probe.calls);
+	}
+
+	@Test
+	void announceTestProbeRuntimeFailureBecomesAFixedMessage() throws Exception
+	{
+		ready();
+		MessageProbe boom = new MessageProbe()
+		{
+			@Override
+			public CheckResult probe(String channelId, String messageId)
+			{
+				return new CheckResult(true, "x");
+			}
+
+			@Override
+			public CheckResult probeChannel(String channelId)
+			{
+				throw new IllegalStateException("token=SECRET");
+			}
+		};
+		server.stop();
+		MutableClock clock = new MutableClock();
+		server = new WebServer(0, settings, new CredentialStore(tmp), new SessionManager(clock),
+				new LoginThrottle(clock), new ConnectionChecks(HttpClient.newHttpClient(), t -> new CheckResult(true, "x")),
+				bot, boom);
+		server.start();
+		login("owner", "correct horse");
+		Res r = call("POST", "/api/test/announce", ids("announceChannelId", C1));
+		assertEquals(200, r.status(), r.body());
+		assertFalse(r.json().get("ok").getAsBoolean());
+		assertEquals("Could not check the channel", r.json().get("message").getAsString());
+		assertFalse(r.body().contains("SECRET"));
+	}
+
+	@Test
 	void testRoutesNeedLoginCsrfAndNewCredentials() throws Exception
 	{
-		for (String section : new String[] {"status", "queue", "role"})
+		for (String section : new String[] {"status", "queue", "role", "announce"})
 		{
 			String path = "/api/test/" + section;
 			assertEquals(401, call("POST", path, "{}", false, false).status());

@@ -13,7 +13,7 @@ class SetupCommandsTest
 	private static Settings base()
 	{
 		return new Settings("tok", "ip", "32400", "plex", "tu", "tk", "ru", "rk", "su", "sk",
-				"r0", "rc0", "rm0", "sc0", "sm0", "qc0", "qm0");
+				"r0", "rc0", "rm0", "sc0", "sm0", "qc0", "qm0", "", "", "");
 	}
 
 	@Test
@@ -22,13 +22,23 @@ class SetupCommandsTest
 		Settings b = base();
 		Settings react = SetupCommandsListener.apply(b, "setupreact", "C", "M", "R");
 		assertEquals(new Settings("tok", "ip", "32400", "plex", "tu", "tk", "ru", "rk", "su", "sk",
-				"R", "C", "M", "sc0", "sm0", "qc0", "qm0"), react);
+				"R", "C", "M", "sc0", "sm0", "qc0", "qm0", "", "", ""), react);
 		Settings status = SetupCommandsListener.apply(b, "setupstatus", "C", "M", "R");
 		assertEquals(new Settings("tok", "ip", "32400", "plex", "tu", "tk", "ru", "rk", "su", "sk",
-				"r0", "rc0", "rm0", "C", "M", "qc0", "qm0"), status);
+				"r0", "rc0", "rm0", "C", "M", "qc0", "qm0", "", "", ""), status);
 		Settings queue = SetupCommandsListener.apply(b, "setupcontentqueue", "C", "M", "R");
 		assertEquals(new Settings("tok", "ip", "32400", "plex", "tu", "tk", "ru", "rk", "su", "sk",
-				"r0", "rc0", "rm0", "sc0", "sm0", "C", "M"), queue);
+				"r0", "rc0", "rm0", "sc0", "sm0", "C", "M", "", "", ""), queue);
+	}
+
+	@Test
+	void setupannouncementsSetsChannelAndBothSwitchesOnly()
+	{
+		Settings a = SetupCommandsListener.apply(base(), "setupannouncements", "C", "", "");
+		assertEquals(new Settings("tok", "ip", "32400", "plex", "tu", "tk", "ru", "rk", "su", "sk",
+				"r0", "rc0", "rm0", "sc0", "sm0", "qc0", "qm0", "C", "true", "true"), a);
+		Settings moved = SetupCommandsListener.apply(a, "setupannouncements", "C2", "", "");
+		assertEquals("C2", moved.announceChannelId());
 	}
 
 	@Test

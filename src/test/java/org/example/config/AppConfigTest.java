@@ -21,7 +21,7 @@ class AppConfigTest
 		AppConfig.init(store);
 		assertEquals("1.1.1.1", AppConfig.get().plexIp());
 
-		store.save(new Settings("", "2.2.2.2", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""));
+		store.save(new Settings("", "2.2.2.2", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""));
 		AppConfig.reload();
 
 		assertEquals("2.2.2.2", AppConfig.get().plexIp());

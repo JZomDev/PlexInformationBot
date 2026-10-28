@@ -28,7 +28,7 @@ public class WebServer
 	private static final String COOKIE = "sid";
 	private static final String TEST_PREFIX = "/api/test/";
 	private static final List<String> TEST_SECTIONS = List.of("discord", "plex", "tautulli", "radarr", "sonarr",
-			"status", "queue", "role");
+			"status", "queue", "role", "announce");
 
 	private interface Route
 	{
@@ -71,7 +71,7 @@ public class WebServer
 		this.bot = bot;
 		this.messages = messages;
 		this.health = new HealthMonitor(settings::effective, checks, bot::state, healthExecutor,
-				System::currentTimeMillis);
+				System::currentTimeMillis, bot::announcementResult);
 		routes.put("/api/session", new Api("GET", false, true, this::session));
 		routes.put("/api/login", new Api("POST", false, true, (ex, s) -> login(ex)));
 		routes.put("/api/logout", new Api("POST", false, true, this::logout));
@@ -527,6 +527,7 @@ public class WebServer
 		CheckResult result = switch (section)
 		{
 			case "status", "queue", "role" -> messageTest(in, e, section);
+			case "announce" -> channelTest(in, e);
 			case "discord" -> checks.discord(secret(in, "botToken", e.botToken(), true));
 			case "plex" ->
 			{
@@ -565,6 +566,30 @@ public class WebServer
 	{
 		String v = str(in, key);
 		return (v == null ? saved : v).strip();
+	}
+
+	private CheckResult channelTest(JsonObject in, Settings e)
+	{
+		String channel = typedOrSaved(in, "announceChannelId", e.announceChannelId());
+		JsonObject typed = new JsonObject();
+		typed.addProperty("announceChannelId", channel);
+		Optional<String> bad = HttpIo.GSON.fromJson(typed, Settings.class).invalidIdField();
+		if (bad.isPresent())
+		{
+			return new CheckResult(false, bad.get());
+		}
+		if (channel.isEmpty())
+		{
+			return new CheckResult(false, "Enter the channel ID first");
+		}
+		try
+		{
+			return messages.probeChannel(channel);
+		}
+		catch (RuntimeException ex)
+		{
+			return new CheckResult(false, "Could not check the channel");
+		}
 	}
 
 	private CheckResult messageTest(JsonObject in, Settings e, String kind)
@@ -667,6 +692,7 @@ public class WebServer
 		body.put("botState", bot.state().name());
 		body.put("queueSet", !e.queueChannelId().isEmpty() && !e.queueMessageId().isEmpty());
 		body.put("statusSet", !e.statusChannelId().isEmpty() && !e.statusMessageId().isEmpty());
+		body.put("announceSet", !e.announceChannelId().isBlank());
 		body.put("roleSet", !e.roleChannelId().isEmpty() && !e.roleMessageId().isEmpty());
 		body.put("setupCommandsRegistered", bot.setupCommandsRegistered());
 		HttpIo.sendJson(ex, 200, body);

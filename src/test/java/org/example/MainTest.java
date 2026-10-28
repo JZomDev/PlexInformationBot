@@ -22,7 +22,7 @@ class MainTest
 	@Test
 	void bindFailureKeepsAConfiguredBotRunning()
 	{
-		Settings withToken = new Settings("tok", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "");
+		Settings withToken = new Settings("tok", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "");
 		assertTrue(Main.continueWithoutSetupPage(withToken));
 		assertFalse(Main.continueWithoutSetupPage(Settings.empty()));
 	}

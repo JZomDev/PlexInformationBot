@@ -23,7 +23,7 @@ class SettingsStoreTest
 		return new Settings(botToken, plexIp, plexPort, base.plexToken(), base.tautulliUrl(), base.tautulliApiKey(),
 				base.radarrUrl(), base.radarrApiKey(), base.sonarrUrl(), base.sonarrApiKey(), base.roleId(),
 				base.roleChannelId(), base.roleMessageId(), base.statusChannelId(), base.statusMessageId(),
-				base.queueChannelId(), base.queueMessageId());
+				base.queueChannelId(), base.queueMessageId(), "", "", "");
 	}
 
 	@Test
@@ -71,7 +71,7 @@ class SettingsStoreTest
 	void maskedHidesOnlyNonEmptySecrets()
 	{
 		Settings s = new Settings("tok", "ip", "p", "", "t", "key", "r", "", "s", "sk",
-				"1", "2", "3", "4", "5", "6", "7");
+				"1", "2", "3", "4", "5", "6", "7", "", "", "");
 		Settings m = s.masked();
 		assertEquals("********", m.botToken());
 		assertEquals("", m.plexToken());
@@ -114,7 +114,7 @@ class SettingsStoreTest
 	void saveIsAtomicAndRoundTrips() throws IOException
 	{
 		Path dir = tmp.resolve("newdir");
-		Settings s = new Settings("a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q");
+		Settings s = new Settings("a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "", "", "");
 		new SettingsStore(dir, Map.of()).save(s);
 		assertFalse(Files.exists(dir.resolve("settings.json.tmp")));
 		SettingsStore reread = new SettingsStore(dir, Map.of());
@@ -176,7 +176,7 @@ class SettingsStoreTest
 	void normalisedHostsStripsSchemeSlashesAndWhitespace()
 	{
 		Settings in = new Settings("tok", "  HTTPS://1.2.3.4/ ", "32400", "ptok", "http://t:8181//", "tkey",
-				" http://r:7878/ ", "rkey", "", "skey", "", "", "", "", "", "", "");
+				" http://r:7878/ ", "rkey", "", "skey", "", "", "", "", "", "", "", "", "", "");
 		Settings out = in.normalisedHosts();
 		assertEquals("1.2.3.4", out.plexIp());
 		assertEquals("t:8181", out.tautulliUrl());
