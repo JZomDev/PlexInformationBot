@@ -107,7 +107,12 @@ public final class Announcer
 			{
 				posted++;
 				retries.remove(id(item.type(), item.key()));
+				boolean interrupted = Thread.interrupted();
 				markSeen(item.type(), item.key(), causes);
+				if (interrupted)
+				{
+					Thread.currentThread().interrupt();
+				}
 			}
 			else
 			{

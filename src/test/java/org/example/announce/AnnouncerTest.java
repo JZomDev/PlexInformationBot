@@ -444,6 +444,28 @@ class AnnouncerTest
 	}
 
 	@Test
+	void interruptedPostStillReachesDiskAndKeepsInterruptFlag()
+	{
+		announcer.runCycle(true, true, true);
+		source.movies.add(movie("m1", 1));
+		CardSink interrupting = item -> {
+			Thread.currentThread().interrupt();
+			return true;
+		};
+		announcer = new Announcer(source, interrupting, store, clock);
+		try
+		{
+			announcer.runCycle(true, true, true);
+			assertTrue(Thread.currentThread().isInterrupted());
+			assertTrue(new AnnouncedStore(tmp).seen("movie", "m1"));
+		}
+		finally
+		{
+			Thread.interrupted();
+		}
+	}
+
+	@Test
 	void sinkFailureStaysFlaggedWhileItemWaitsInBackoff()
 	{
 		announcer.runCycle(true, true, true);
