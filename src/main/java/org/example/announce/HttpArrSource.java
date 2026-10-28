@@ -20,7 +20,7 @@ import java.util.function.Supplier;
 /** Reads qualifying movies from Radarr and finished seasons from Sonarr. Messages never hold the key or URL. */
 public class HttpArrSource implements ArrSource
 {
-	private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
+	private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
 	private static final Gson GSON = new Gson();
 
 	private final Supplier<Settings> settings;
@@ -30,6 +30,24 @@ public class HttpArrSource implements ArrSource
 	{
 		this.settings = settings;
 		this.client = client;
+	}
+
+	@Override
+	public boolean configured(String type)
+	{
+		Settings s = settings.get();
+		return Announcer.MOVIE.equals(type) ? usable(s.radarrUrl(), s.radarrApiKey())
+				: usable(s.sonarrUrl(), s.sonarrApiKey());
+	}
+
+	private static boolean usable(String url, String key)
+	{
+		return !host(url).isEmpty() && key != null && !key.isBlank();
+	}
+
+	private static String host(String url)
+	{
+		return url == null ? "" : url.trim().replaceFirst("(?i)^https?://", "").replaceAll("/+$", "");
 	}
 
 	@Override
@@ -102,12 +120,15 @@ public class HttpArrSource implements ArrSource
 					int aired = integer(st, "episodeCount");
 					int files = integer(st, "episodeFileCount");
 					boolean upcoming = st.has("nextAiring") && !st.get("nextAiring").isJsonNull();
-					if (aired <= 0 || files < aired || upcoming)
+					int total = integer(st, "totalEpisodeCount");
+					if (aired <= 0 || files < aired || files < total || upcoming)
 					{
 						continue;
 					}
 					String details = (genres.isEmpty() ? "" : genres + " · ") + files + " episodes";
-					out.add(new Item(Announcer.SEASON, tvdb + ":" + number, str(sr, "title") + " · Season " + number,
+					String seriesTitle = str(sr, "title");
+					String title = seriesTitle.isBlank() ? "" : seriesTitle + " · Season " + number;
+					out.add(new Item(Announcer.SEASON, tvdb + ":" + number, title,
 							integer(sr, "year"), str(sr, "overview"), details, poster(sr), added(sr)));
 				}
 			}
@@ -122,10 +143,10 @@ public class HttpArrSource implements ArrSource
 	private JsonArray fetch(String url, String key, String path) throws IOException
 	{
 		String name = "movie".equals(path) ? "Radarr" : "Sonarr";
-		String host = url == null ? "" : url.trim().replaceFirst("(?i)^https?://", "").replaceAll("/+$", "");
-		if (host.isEmpty() || key == null || key.isBlank())
+		String host = host(url);
+		if (!usable(url, key))
 		{
-			return new JsonArray();
+			throw new IOException(name + " is not configured");
 		}
 		HttpRequest req;
 		try

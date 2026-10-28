@@ -45,6 +45,13 @@ class AnnouncerTest
 		List<Item> seasons = new ArrayList<>();
 		boolean moviesThrow;
 		boolean seasonsThrow;
+		boolean moviesConfigured = true;
+		boolean seasonsConfigured = true;
+
+		public boolean configured(String type)
+		{
+			return Announcer.MOVIE.equals(type) ? moviesConfigured : seasonsConfigured;
+		}
 
 		public List<Item> movies() throws IOException
 		{
@@ -362,5 +369,117 @@ class AnnouncerTest
 		assertTrue(r.moviesFailed());
 		assertTrue(r.seasonsFailed());
 		assertEquals(0, r.posted());
+	}
+
+	@Test
+	void unconfiguredTypeIsSkippedThenBaselinesSilentlyOnceConfigured()
+	{
+		source.moviesConfigured = false;
+		source.seasonsConfigured = false;
+		Announcer.Result r = announcer.runCycle(true, true, true);
+		assertFalse(r.moviesFailed() || r.seasonsFailed() || r.sinkFailed());
+		assertFalse(store.baselined("movie"));
+		assertFalse(store.baselined("season"));
+
+		source.moviesConfigured = true;
+		source.movies.add(movie("m1", 1));
+		source.movies.add(movie("m2", 2));
+		r = announcer.runCycle(true, true, true);
+		assertEquals(0, r.posted());
+		assertTrue(sink.posted.isEmpty());
+		assertTrue(store.baselined("movie"));
+		assertFalse(store.baselined("season"));
+
+		source.movies.add(movie("m3", 3));
+		announcer.runCycle(true, true, true);
+		assertEquals(List.of("m3"), sink.keys());
+	}
+
+	@Test
+	void typeOffAndNotBaselinedStaysUnbaselinedThenBaselinesSilentlyWhenTurnedOn()
+	{
+		source.movies.add(movie("m1", 1));
+		source.seasons.add(season("s1", 2));
+		announcer.runCycle(false, true, true);
+		assertFalse(store.baselined("movie"));
+		assertFalse(store.seen("movie", "m1"));
+		assertTrue(store.baselined("season"));
+
+		Announcer.Result r = announcer.runCycle(true, true, true);
+		assertEquals(0, r.posted());
+		assertTrue(sink.posted.isEmpty());
+		assertTrue(store.baselined("movie"));
+		assertTrue(store.seen("movie", "m1"));
+		source.movies.add(movie("m2", 3));
+		announcer.runCycle(true, true, true);
+		assertEquals(List.of("m2"), sink.keys());
+	}
+
+	@Test
+	void interruptedThreadStopsThePostingLoop()
+	{
+		announcer.runCycle(true, true, true);
+		source.movies.add(movie("m1", 1));
+		source.movies.add(movie("m2", 2));
+		source.movies.add(movie("m3", 3));
+		CardSink interrupting = item -> {
+			sink.attempts.add(item.key());
+			sink.posted.add(item);
+			Thread.currentThread().interrupt();
+			return true;
+		};
+		announcer = new Announcer(source, interrupting, store, clock);
+		try
+		{
+			Announcer.Result r = announcer.runCycle(true, true, true);
+			assertEquals(List.of("m1"), sink.attempts);
+			assertEquals(1, r.posted());
+			assertTrue(store.seen("movie", "m1"));
+			assertFalse(store.seen("movie", "m2"));
+		}
+		finally
+		{
+			Thread.interrupted();
+		}
+	}
+
+	@Test
+	void sinkFailureStaysFlaggedWhileItemWaitsInBackoff()
+	{
+		announcer.runCycle(true, true, true);
+		source.movies.add(movie("m1", 1));
+		sink.failKeys.add("m1");
+		assertTrue(announcer.runCycle(true, true, true).sinkFailed());
+		assertTrue(announcer.runCycle(true, true, true).sinkFailed());
+		assertEquals(1, sink.attempts.size());
+		clock.advance(Duration.ofSeconds(30));
+		sink.failKeys.clear();
+		assertFalse(announcer.runCycle(true, true, true).sinkFailed());
+	}
+
+	@Test
+	void backoffForAnItemThatDisappearedDoesNotKeepSinkFailed()
+	{
+		announcer.runCycle(true, true, true);
+		source.movies.add(movie("m1", 1));
+		sink.failKeys.add("m1");
+		assertTrue(announcer.runCycle(true, true, true).sinkFailed());
+		source.movies.clear();
+		assertFalse(announcer.runCycle(true, true, true).sinkFailed());
+	}
+
+	@Test
+	void baselineSavesOncePerType() throws IOException
+	{
+		for (int i = 0; i < 20; i++)
+		{
+			source.movies.add(movie("m" + i, i));
+		}
+		announcer.runCycle(true, true, true);
+		for (int i = 0; i < 20; i++)
+		{
+			assertTrue(store.seen("movie", "m" + i));
+		}
+		assertTrue(new AnnouncedStore(tmp).seen("movie", "m19"));
 	}
 }

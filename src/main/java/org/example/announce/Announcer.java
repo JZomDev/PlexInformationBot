@@ -75,21 +75,25 @@ public final class Announcer
 
 	private Result cycle(boolean moviesOn, boolean seasonsOn, Set<String> causes)
 	{
-		List<Item> movies = fetch(MOVIE, causes);
-		List<Item> seasons = fetch(SEASON, causes);
+		boolean moviesConfigured = source.configured(MOVIE);
+		boolean seasonsConfigured = source.configured(SEASON);
+		// An unconfigured service is skipped entirely: nothing baselined, nothing marked seen, no failure.
+		List<Item> movies = moviesConfigured ? fetch(MOVIE, causes) : null;
+		List<Item> seasons = seasonsConfigured ? fetch(SEASON, causes) : null;
 
 		List<Item> candidates = new ArrayList<>();
 		collect(MOVIE, movies, moviesOn, candidates, causes);
 		collect(SEASON, seasons, seasonsOn, candidates, causes);
 		candidates.sort(Comparator.comparing(Item::added).thenComparing(Item::key));
 
+		pruneRetries(candidates, movies != null || !moviesConfigured, seasons != null || !seasonsConfigured);
 		Instant now = clock.instant();
 		int posted = 0;
 		int attempted = 0;
 		boolean sinkFailed = false;
 		for (Item item : candidates)
 		{
-			if (attempted >= MAX_PER_CYCLE)
+			if (attempted >= MAX_PER_CYCLE || Thread.currentThread().isInterrupted())
 			{
 				break;
 			}
@@ -114,7 +118,21 @@ public final class Announcer
 			}
 		}
 		logNewCauses(causes);
-		return new Result(posted, movies == null, seasons == null, sinkFailed);
+		// Items still waiting in backoff keep the failure showing so it does not flicker back to ok.
+		return new Result(posted, movies == null && moviesConfigured, seasons == null && seasonsConfigured,
+				sinkFailed || !retries.isEmpty());
+	}
+
+	/** Forgets backoff for items no longer waiting to be posted, unless their source could not be read. */
+	private void pruneRetries(List<Item> candidates, boolean moviesRead, boolean seasonsRead)
+	{
+		Set<String> ids = new HashSet<>();
+		for (Item item : candidates)
+		{
+			ids.add(id(item.type(), item.key()));
+		}
+		retries.keySet().removeIf(k -> !ids.contains(k)
+				&& (k.startsWith(MOVIE + "|") ? moviesRead : seasonsRead));
 	}
 
 	/** Returns null when the source failed. */
@@ -147,6 +165,7 @@ public final class Announcer
 			lostWarned = true;
 			logger.warn("Announcement history was lost or unreadable; re-baselining without posting.");
 		}
+		List<String> toMark = new ArrayList<>();
 		for (Item item : items)
 		{
 			if (item == null || isSeen(type, item.key()))
@@ -160,13 +179,14 @@ public final class Announcer
 			}
 			if (!baselined || !on)
 			{
-				markSeen(type, item.key(), causes);
+				toMark.add(item.key());
 			}
 			else
 			{
 				candidates.add(item);
 			}
 		}
+		markSeenAll(type, toMark, causes);
 		if (!baselined)
 		{
 			markBaselined(type, causes);
@@ -222,6 +242,26 @@ public final class Announcer
 		try
 		{
 			store.markSeen(type, key);
+		}
+		catch (UncheckedIOException e)
+		{
+			causes.add("store: could not save announced state: " + e.getCause());
+		}
+	}
+
+	private void markSeenAll(String type, List<String> keys, Set<String> causes)
+	{
+		if (keys.isEmpty())
+		{
+			return;
+		}
+		for (String key : keys)
+		{
+			memorySeen.add(id(type, key));
+		}
+		try
+		{
+			store.markSeenAll(type, keys);
 		}
 		catch (UncheckedIOException e)
 		{

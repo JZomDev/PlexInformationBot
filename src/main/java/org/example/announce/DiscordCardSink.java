@@ -11,7 +11,10 @@ import org.javacord.api.entity.message.mention.AllowedMentions;
 import org.javacord.api.entity.message.mention.AllowedMentionsBuilder;
 
 import java.awt.Color;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /** Posts an announcement card as a silent embed in the announcements channel. */
@@ -22,12 +25,40 @@ public final class DiscordCardSink implements CardSink
 	private static final long SEND_TIMEOUT_SECONDS = 15;
 
 	private final Logger logger = LogManager.getLogger(DiscordCardSink.class);
-	private final Supplier<TextChannel> channel;
+	static final int MAX_TITLE = 256;
+
+	private final Function<Item, Future<?>> sender;
+	private final long timeoutSeconds;
 
 	/** The channel is looked up on every post so a changed setting applies at once. */
 	public DiscordCardSink(Supplier<TextChannel> channel)
 	{
-		this.channel = channel;
+		this(item -> new MessageBuilder()
+				.setEmbed(embed(item))
+				.setAllowedMentions(noMentions())
+				.send(channel.get()), SEND_TIMEOUT_SECONDS);
+	}
+
+	DiscordCardSink(Function<Item, Future<?>> sender, long timeoutSeconds)
+	{
+		this.sender = sender;
+		this.timeoutSeconds = timeoutSeconds;
+	}
+
+	DiscordCardSink(Function<Item, Future<?>> sender)
+	{
+		this(sender, SEND_TIMEOUT_SECONDS);
+	}
+
+	/** Cuts to at most max chars without splitting a surrogate pair. */
+	static String truncate(String s, int max)
+	{
+		if (s.length() <= max)
+		{
+			return s;
+		}
+		int end = Character.isHighSurrogate(s.charAt(max - 1)) ? max - 1 : max;
+		return s.substring(0, end);
 	}
 
 	public static DiscordCardSink forApi(DiscordApi api, Supplier<Settings> settings)
@@ -46,11 +77,11 @@ public final class DiscordCardSink implements CardSink
 		EmbedBuilder e = new EmbedBuilder()
 				.setColor(PLEX_GOLD)
 				.setAuthor(movie ? "New movie on Plex" : "Season complete on Plex")
-				.setTitle(title);
+				.setTitle(truncate(title, MAX_TITLE));
 		String summary = item.summary();
 		if (summary != null && !summary.isBlank())
 		{
-			e.setDescription(summary.length() > MAX_SUMMARY ? summary.substring(0, MAX_SUMMARY) : summary);
+			e.setDescription(truncate(summary, MAX_SUMMARY));
 		}
 		if (item.details() != null && !item.details().isBlank())
 		{
@@ -74,17 +105,19 @@ public final class DiscordCardSink implements CardSink
 	{
 		try
 		{
-			new MessageBuilder()
-					.setEmbed(embed(item))
-					.setAllowedMentions(noMentions())
-					.send(channel.get())
-					.get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+			sender.apply(item).get(timeoutSeconds, TimeUnit.SECONDS);
 			return true;
 		}
 		catch (InterruptedException e)
 		{
+			// The send was already fired, so Discord may have accepted it: report it posted, not failed.
 			Thread.currentThread().interrupt();
-			return false;
+			return true;
+		}
+		catch (TimeoutException e)
+		{
+			logger.warn("Announcement send was not confirmed in time; treating it as posted.");
+			return true;
 		}
 		catch (Exception e)
 		{

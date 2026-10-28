@@ -38,7 +38,10 @@ class HttpArrSourceTest
 			{"seasonNumber":1,"statistics":{"episodeCount":8,"episodeFileCount":8,"totalEpisodeCount":8}},
 			{"seasonNumber":2,"statistics":{"episodeCount":8,"episodeFileCount":8,"nextAiring":"2030-01-01T00:00:00Z"}},
 			{"seasonNumber":3,"statistics":{"episodeCount":8,"episodeFileCount":5}},
-			{"seasonNumber":4,"statistics":{"episodeCount":0,"episodeFileCount":0}}]}]
+			{"seasonNumber":4,"statistics":{"episodeCount":0,"episodeFileCount":0}},
+			{"seasonNumber":5,"statistics":{"episodeCount":8,"episodeFileCount":8,"totalEpisodeCount":10}}]},
+			{"tvdbId":78,"title":" ","year":2021,"added":"2024-06-01T00:00:00Z",
+			"seasons":[{"seasonNumber":1,"statistics":{"episodeCount":2,"episodeFileCount":2,"totalEpisodeCount":2}}]}]
 			""";
 
 	private HttpServer fake;
@@ -120,7 +123,9 @@ class HttpArrSourceTest
 	void seasonsReturnsOnlyCompleteNonSpecialSeasons() throws Exception
 	{
 		List<Item> items = source().seasons();
-		assertEquals(1, items.size());
+		assertEquals(2, items.size());
+		assertEquals("", items.get(1).title());
+		assertEquals("78:1", items.get(1).key());
 		Item s = items.get(0);
 		assertEquals("season", s.type());
 		assertEquals("77:1", s.key());
@@ -163,12 +168,18 @@ class HttpArrSourceTest
 	}
 
 	@Test
-	void blankSettingsGiveEmptyListsWithoutRequests() throws Exception
+	void blankSettingsAreNotConfiguredAndMakeNoRequests() throws Exception
 	{
-		assertTrue(source("", KEY, "", KEY).movies().isEmpty());
-		assertTrue(source(hostPort, "", hostPort, "").movies().isEmpty());
-		assertTrue(source("", KEY, "", KEY).seasons().isEmpty());
-		assertTrue(source(hostPort, "", hostPort, "").seasons().isEmpty());
+		assertFalse(source("", KEY, "", KEY).configured("movie"));
+		assertFalse(source(hostPort, "", hostPort, "").configured("movie"));
+		assertFalse(source("", KEY, "", KEY).configured("season"));
+		assertFalse(source(hostPort, "", hostPort, "").configured("season"));
+		assertTrue(source().configured("movie"));
+		assertTrue(source().configured("season"));
+		assertThrows(IOException.class, source("", KEY, "", KEY)::movies);
+		assertThrows(IOException.class, source(hostPort, "", hostPort, "")::movies);
+		assertThrows(IOException.class, source("", KEY, "", KEY)::seasons);
+		assertThrows(IOException.class, source(hostPort, "", hostPort, "")::seasons);
 		assertTrue(paths.isEmpty());
 	}
 }

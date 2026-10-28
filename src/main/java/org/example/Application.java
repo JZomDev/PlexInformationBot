@@ -201,6 +201,8 @@ public class Application implements BotController
 
 		DiscordApi api = LoginWait.await(builder.login(), LOGIN_TIMEOUT_SECONDS, TimeUnit.SECONDS, DiscordApi::disconnect);
 		ScheduledExecutorService service;
+		// Announcements get their own thread: one tick can block for over a minute.
+		ScheduledExecutorService announceService = Executors.newSingleThreadScheduledExecutor();
 		try
 		{
 			logger.info("You can invite me by using the following url: {}", api.createBotInvite());
@@ -216,11 +218,12 @@ public class Application implements BotController
 			{
 				registerSetupCommands(api, joined, registered);
 			}
-			service = launchScheduledExecutor(api);
+			service = launchScheduledExecutor(api, announceService);
 			liveApi = api;
 		}
 		catch (Throwable e)
 		{
+			announceService.shutdownNow();
 			disconnect(api);
 			throw e;
 		}
@@ -229,6 +232,7 @@ public class Application implements BotController
 			announcements = null;
 			currentRegistrations = null;
 			service.shutdownNow();
+			announceService.shutdownNow();
 			try
 			{
 				service.awaitTermination(5, TimeUnit.SECONDS);
@@ -268,7 +272,7 @@ public class Application implements BotController
 		return value == null || value.isBlank();
 	}
 
-	private ScheduledExecutorService launchScheduledExecutor(DiscordApi api)
+	private ScheduledExecutorService launchScheduledExecutor(DiscordApi api, ScheduledExecutorService announceService)
 	{
 		ScheduledExecutorService mService = Executors.newScheduledThreadPool(2);
 		CountPlexUsersWorker countPlexUsersWorker = new CountPlexUsersWorker();
@@ -279,7 +283,7 @@ public class Application implements BotController
 		{
 			AnnouncementService announcementService = AnnouncementService.create(api, AppConfig::get, store.dir());
 			announcements = announcementService;
-			mService.scheduleWithFixedDelay(announcementService::tick, 0, 90, TimeUnit.SECONDS);
+			announceService.scheduleWithFixedDelay(announcementService::tick, 0, 90, TimeUnit.SECONDS);
 		}
 
 		mService.scheduleWithFixedDelay(() -> {

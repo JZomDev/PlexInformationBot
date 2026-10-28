@@ -171,11 +171,18 @@ final class HealthMonitor
 		}
 		return switch (bot.get())
 		{
-			case RUNNING -> new Health("ok", "Bot is connected");
+			case RUNNING -> cannotPost(s) ? new Health("down", "Announcements cannot post to the channel")
+					: new Health("ok", "Bot is connected");
 			case STARTING -> new Health("unknown", "Bot is starting");
 			case FAILED -> new Health("down", "Bot could not log in");
 			case NOT_CONFIGURED -> UNSET;
 		};
+	}
+
+	private boolean cannotPost(Settings s)
+	{
+		Optional<Announcer.Result> last = announcements.get();
+		return last.isPresent() && last.get().sinkFailed() && (s.announceMovies() || s.announceSeasons());
 	}
 
 	private static boolean configured(String section, Settings s)

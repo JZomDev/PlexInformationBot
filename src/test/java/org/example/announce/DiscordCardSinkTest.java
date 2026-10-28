@@ -85,4 +85,48 @@ class DiscordCardSinkTest
 			throw new IllegalStateException("no channel");
 		}).post(item(Announcer.MOVIE, "Heat", 1995, "s")));
 	}
+
+	@Test
+	void titleTruncatedTo256()
+	{
+		JsonObject j = json(item(Announcer.SEASON, "t".repeat(400), 0, "s"));
+		assertEquals(256, j.get("title").getAsString().length());
+	}
+
+	@Test
+	void truncationDoesNotSplitASurrogatePair()
+	{
+		String emoji = "\uD83D\uDE00";
+		JsonObject j = json(item(Announcer.SEASON, "a".repeat(255) + emoji, 0, "b".repeat(299) + emoji));
+		assertEquals(255, j.get("title").getAsString().length());
+		assertEquals(299, j.get("description").getAsString().length());
+	}
+
+	@Test
+	void interruptedSendCountsAsPostedAndKeepsTheInterruptFlag()
+	{
+		java.util.concurrent.atomic.AtomicInteger sends = new java.util.concurrent.atomic.AtomicInteger();
+		DiscordCardSink sink = new DiscordCardSink(i -> {
+			sends.incrementAndGet();
+			return new java.util.concurrent.CompletableFuture<>();
+		});
+		Thread.currentThread().interrupt();
+		try
+		{
+			assertTrue(sink.post(item(Announcer.MOVIE, "Heat", 1995, "s")));
+			assertTrue(Thread.currentThread().isInterrupted());
+			assertEquals(1, sends.get());
+		}
+		finally
+		{
+			Thread.interrupted();
+		}
+	}
+
+	@Test
+	void timedOutSendCountsAsPosted()
+	{
+		DiscordCardSink sink = new DiscordCardSink(i -> new java.util.concurrent.CompletableFuture<>(), 0);
+		assertTrue(sink.post(item(Announcer.MOVIE, "Heat", 1995, "s")));
+	}
 }

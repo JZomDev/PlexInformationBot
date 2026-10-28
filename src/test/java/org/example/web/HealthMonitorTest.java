@@ -252,4 +252,26 @@ class HealthMonitorTest
 		assertEquals("unknown", state(withAnnouncer(arr("true"), ok).snapshot(false), "radarr"));
 		assertEquals("unknown", state(withAnnouncer(arr("true"), null).snapshot(false), "sonarr"));
 	}
+
+	@Test
+	void sinkFailureShowsOnTheDiscordDot()
+	{
+		var failed = new org.example.announce.Announcer.Result(0, false, false, true);
+		Map<String, HealthMonitor.Health> m = withAnnouncer(arr("true"), failed).snapshot(false);
+		assertEquals("down", state(m, "discord"));
+		assertEquals("Announcements cannot post to the channel", m.get("discord").message());
+		assertEquals("unknown", state(m, "radarr"));
+	}
+
+	@Test
+	void sinkFailureIgnoredWhenOffHealthyOrBotNotRunning()
+	{
+		var failed = new org.example.announce.Announcer.Result(0, false, false, true);
+		assertEquals("ok", state(withAnnouncer(arr("false"), failed).snapshot(false), "discord"));
+		var ok = new org.example.announce.Announcer.Result(0, false, false, false);
+		assertEquals("ok", state(withAnnouncer(arr("true"), ok).snapshot(false), "discord"));
+		bot = BotState.FAILED;
+		assertEquals("Bot could not log in",
+				withAnnouncer(arr("true"), failed).snapshot(false).get("discord").message());
+	}
 }

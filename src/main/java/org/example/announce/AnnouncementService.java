@@ -8,8 +8,6 @@ import java.net.http.HttpClient;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 import org.javacord.api.DiscordApi;
@@ -44,8 +42,9 @@ public final class AnnouncementService
 			Settings s = settings.get();
 			last = announcer.runCycle(s.announceMovies(), s.announceSeasons(), !s.announceChannelId().isBlank());
 		}
-		catch (Exception e)
+		catch (Throwable e)
 		{
+			// An Error must never escape: it would cancel the repeating schedule.
 			logger.warn("Announcement cycle failed: {}", e.getClass().getSimpleName());
 		}
 	}
@@ -54,29 +53,5 @@ public final class AnnouncementService
 	public Optional<Announcer.Result> lastResult()
 	{
 		return Optional.ofNullable(last);
-	}
-
-	/** A short, secret-free description of what went wrong in the last cycle, if anything. */
-	public Optional<String> lastProblem()
-	{
-		Announcer.Result r = last;
-		if (r == null)
-		{
-			return Optional.empty();
-		}
-		List<String> parts = new ArrayList<>();
-		if (r.moviesFailed())
-		{
-			parts.add("Radarr unreachable");
-		}
-		if (r.seasonsFailed())
-		{
-			parts.add("Sonarr unreachable");
-		}
-		if (r.sinkFailed())
-		{
-			parts.add("could not post to the channel");
-		}
-		return parts.isEmpty() ? Optional.empty() : Optional.of(String.join("; ", parts));
 	}
 }

@@ -19,13 +19,24 @@ class AnnouncementServiceTest
 
 	final AtomicInteger calls = new AtomicInteger();
 	volatile RuntimeException boom;
+	volatile Error boomError;
 
 	final ArrSource source = new ArrSource()
 	{
 		@Override
+		public boolean configured(String type)
+		{
+			return true;
+		}
+
+		@Override
 		public List<Item> movies() throws IOException
 		{
 			calls.incrementAndGet();
+			if (boomError != null)
+			{
+				throw boomError;
+			}
 			if (boom != null)
 			{
 				throw boom;
@@ -58,7 +69,6 @@ class AnnouncementServiceTest
 		AnnouncementService s = service("");
 		assertDoesNotThrow(s::tick);
 		assertEquals(0, calls.get());
-		assertTrue(s.lastProblem().isEmpty());
 	}
 
 	@Test
@@ -67,7 +77,6 @@ class AnnouncementServiceTest
 		AnnouncementService s = service("123");
 		s.tick();
 		assertEquals(1, calls.get());
-		assertTrue(s.lastProblem().isEmpty());
 		assertTrue(s.lastResult().isPresent());
 	}
 
@@ -77,9 +86,18 @@ class AnnouncementServiceTest
 		boom = new IllegalStateException("secret-key-123");
 		AnnouncementService s = service("123");
 		assertDoesNotThrow(s::tick);
-		assertTrue(s.lastProblem().isPresent());
-		assertFalse(s.lastProblem().get().contains("secret-key-123"));
 		assertTrue(s.lastResult().get().moviesFailed());
+	}
+
+	@Test
+	void anErrorInACycleIsSwallowedSoTheScheduleSurvives()
+	{
+		boomError = new StackOverflowError();
+		AnnouncementService s = service("123");
+		assertDoesNotThrow(s::tick);
+		boomError = null;
+		s.tick();
+		assertTrue(s.lastResult().isPresent());
 	}
 
 	@Test

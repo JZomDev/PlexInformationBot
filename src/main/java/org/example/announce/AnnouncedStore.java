@@ -97,6 +97,15 @@ public final class AnnouncedStore
 		}
 	}
 
+	/** Marks many keys seen with a single save. */
+	public synchronized void markSeenAll(String type, java.util.Collection<String> keys)
+	{
+		if (data.seen.computeIfAbsent(type, t -> new LinkedHashSet<>()).addAll(keys))
+		{
+			save();
+		}
+	}
+
 	private void save()
 	{
 		try

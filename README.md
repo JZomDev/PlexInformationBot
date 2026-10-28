@@ -31,7 +31,8 @@ The bot can post a card when Radarr finishes a new movie and when Sonarr has eve
 - On the setup page, "Announce new movies" (Radarr section) and "Announce completed seasons" (Sonarr section) turn each kind on or off. The status line at the top shows "Announcements: channel set" or "not set".
 - The bot checks Radarr and Sonarr every 90 seconds. Posts are silent (no notification pings).
 - The first time you enable announcements nothing already in your library is announced, only what arrives afterwards.
-- A season is announced only once it is complete.
+- A season is announced only once it is complete: every aired episode has a file, no episode is still to air, and no episode is listed without a file (including ones without an air date yet).
+- A service with no address or key saved is skipped; nothing is recorded for it, so the first time you set it up its existing library is baselined silently.
 
 ## Invite link, health dots and setup checklist
 
