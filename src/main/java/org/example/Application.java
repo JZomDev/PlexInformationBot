@@ -75,6 +75,9 @@ public class Application implements BotController
 	private static final long SESSION_CACHE_MS = 2000;
 	private static final long LOGIN_TIMEOUT_SECONDS = 60;
 	private volatile String lastEmbedSignature = "";
+	static final long NEVER_EDITED = Long.MIN_VALUE;
+	private static final long STATUS_REFRESH_NANOS = TimeUnit.SECONDS.toNanos(15);
+	private volatile long lastEmbedEditNanos = NEVER_EDITED;
 	private final SessionCache<List<PlexMediatag<?>>> sessionCache =
 			new SessionCache<>(this::loadSessions, System::currentTimeMillis, SESSION_CACHE_MS);
 	private final AtomicBoolean queueEmbedTaskRunning = new AtomicBoolean(false);
@@ -162,11 +165,20 @@ public class Application implements BotController
 		return current != null && current.anySucceeded();
 	}
 
+	/** Edit on content change, or when the "Updated" footer is at least 15s old. */
+	static boolean shouldEdit(String signature, String lastSignature, long nowNanos, long lastEditNanos)
+	{
+		return !signature.equals(lastSignature)
+				|| lastEditNanos == NEVER_EDITED
+				|| nowNanos - lastEditNanos >= STATUS_REFRESH_NANOS;
+	}
+
 	/** Runs on the lifecycle thread: opens the one Discord connection and its scheduler. */
 	private BotLifecycle.Connection connect(Settings settings) throws Exception
 	{
 		clearSessions();
 		lastEmbedSignature = "";
+		lastEmbedEditNanos = NEVER_EDITED;
 		queueEmbedTaskRunning.set(false);
 		plexReconnecting.set(false);
 		initApi(settings);
@@ -330,13 +342,14 @@ public class Application implements BotController
 
 					PlexInformationWorker.InfoEmbed info = plexInformationWorker.execute(api, getServer(), getSessions()).join();
 					String signature = cfg.statusChannelId() + "/" + cfg.statusMessageId() + "/" + (info == null ? "" : info.signature());
-					if (info != null && !signature.equals(lastEmbedSignature))
+					if (info != null && shouldEdit(signature, lastEmbedSignature, System.nanoTime(), lastEmbedEditNanos))
 					{
 						Message msg = api.getMessageById(cfg.statusMessageId(), textChannel).join();
 						if (msg != null)
 						{
 							msg.edit(info.embed()).join();
 							lastEmbedSignature = signature;
+							lastEmbedEditNanos = System.nanoTime();
 							logger.info("Message was modified at {}", LocalDateTime.now());
 						}
 					}
